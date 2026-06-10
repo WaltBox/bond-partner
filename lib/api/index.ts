@@ -11,7 +11,7 @@ import type {
 import type {
   AuthUser,
   DashboardData,
-  Membership,
+  MeResponse,
   Offer,
   Onboarding,
   OnboardingStep,
@@ -72,12 +72,9 @@ export async function authLogout(): Promise<void> {
 
 // ── Identity / onboarding (not partner-scoped) ───────────────────────────────
 
-export function getMe(): Promise<{ partners: Membership[] }> {
+export function getMe(): Promise<MeResponse> {
   if (USE_MOCK) return mock.getMe();
-  // Defensive parse — accept partners | companies | memberships.
-  return bondFetch<Record<string, unknown>>(`/partner/me`).then((d) => ({
-    partners: (d.partners ?? d.companies ?? d.memberships ?? []) as Membership[],
-  }));
+  return bondFetch<MeResponse>(`/partner/me`);
 }
 
 export function joinPartner(token: string): Promise<{ partner_id: string; role: string }> {

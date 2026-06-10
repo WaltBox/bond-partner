@@ -8,9 +8,24 @@ import {
   setActivePartnerId,
   type Membership,
   type Onboarding,
+  type OnboardingStep,
   type PartnerInfo,
 } from "@/lib/api";
 import { useAuth } from "@/components/auth-context";
+
+const ALL_STEPS: OnboardingStep[] = ["profile", "locations", "offers", "agreement"];
+
+/** Build an Onboarding object from a membership's status/steps (so we don't
+ *  depend on a separate /onboarding call). */
+function membershipOnboarding(m: Membership): Onboarding {
+  const steps = (m.onboardingSteps ?? {}) as Partial<Record<OnboardingStep, boolean>>;
+  const remaining = ALL_STEPS.filter((s) => !steps[s]);
+  return {
+    status: m.onboardingStatus ?? (remaining.length === 0 ? "complete" : "in_progress"),
+    steps,
+    remaining,
+  };
+}
 
 type PartnerState = {
   partners: Membership[];
@@ -52,20 +67,13 @@ export function PartnerProvider({ children }: { children: React.ReactNode }) {
     setLoading(true);
     setError(null);
     (async () => {
-      // Discover the user's company via /api/partner/me. That route isn't live
-      // yet, so fall back to a configured partner id when it 404s (temporary —
-      // remove once /api/partner/me ships).
-      let list: Membership[];
-      try {
-        list = (await getMe()).partners;
-      } catch (err) {
-        const fallback = process.env.NEXT_PUBLIC_FALLBACK_PARTNER_ID;
-        if (!fallback) throw err;
-        list = [{ id: fallback, name: null, role: "owner" }];
-      }
+      // GET /api/partner/me → { user, memberships:[{ partnerId, partnerName, … }] }
+      const { memberships } = await getMe();
       if (!alive) return;
-      setPartners(list);
-      const chosen = list.find((p) => p.id === selectedId) ?? list[0] ?? null;
+      setPartners(memberships);
+      // Auto-select the single membership; don't filter by onboardingStatus.
+      const chosen =
+        memberships.find((m) => m.partnerId === selectedId) ?? memberships[0] ?? null;
       if (!chosen) {
         setActivePartnerId(null);
         setPartner(null);
@@ -73,7 +81,9 @@ export function PartnerProvider({ children }: { children: React.ReactNode }) {
         setLoading(false);
         return;
       }
-      setActivePartnerId(chosen.id);
+      setActivePartnerId(chosen.partnerId);
+      // Onboarding comes straight from /me; refresh with the dedicated endpoint
+      // if it's available.
       const [profile, ob] = await Promise.all([
         getPartner().catch(() => null),
         getOnboarding().catch(() => null),
@@ -81,13 +91,13 @@ export function PartnerProvider({ children }: { children: React.ReactNode }) {
       if (!alive) return;
       setPartner(
         profile ?? {
-          id: chosen.id,
-          name: chosen.name,
-          category: chosen.category ?? null,
-          logoUrl: chosen.logoUrl ?? null,
+          id: chosen.partnerId,
+          name: chosen.partnerName,
+          category: null,
+          logoUrl: null,
         }
       );
-      setOnboarding(ob);
+      setOnboarding(ob ?? membershipOnboarding(chosen));
       setLoading(false);
     })().catch((e) => {
       if (alive) {

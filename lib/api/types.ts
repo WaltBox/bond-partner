@@ -110,13 +110,18 @@ export interface AuthUser {
   [k: string]: unknown;
 }
 
-// GET /api/partner/me -> data  (the companies the logged-in user belongs to)
+// GET /api/partner/me -> data.memberships  (companies the user belongs to)
 export interface Membership {
-  id: string; // partner/company id
-  name: string | null;
+  partnerId: string; // ← use as :id in every /api/partner/:id/* call
   role: string;
-  logoUrl?: string | null;
-  category?: string | null;
+  partnerName: string | null;
+  onboardingStatus?: OnboardingStatus;
+  onboardingSteps?: Record<string, boolean>;
+}
+
+export interface MeResponse {
+  user: AuthUser;
+  memberships: Membership[];
 }
 
 export type OnboardingStatus = "draft" | "in_progress" | "complete" | "live";

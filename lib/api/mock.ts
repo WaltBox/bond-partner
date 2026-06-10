@@ -9,7 +9,7 @@
 
 import type {
   DashboardData,
-  Membership,
+  MeResponse,
   Offer,
   Onboarding,
   OnboardingStep,
@@ -251,11 +251,18 @@ function recomputeOnboarding() {
   onboardingState.status = onboardingState.remaining.length === 0 ? "complete" : "in_progress";
 }
 
-export async function getMe(): Promise<{ partners: Membership[] }> {
+export async function getMe(): Promise<MeResponse> {
   await sleep(80);
   return {
-    partners: [
-      { id: "demo-partner-uuid", name: "Rusty Taco", role: "owner", category: "dining", logoUrl: null },
+    user: { id: "mock", email: "demo@bond.app" },
+    memberships: [
+      {
+        partnerId: "demo-partner-uuid",
+        role: "member",
+        partnerName: "Rusty Taco",
+        onboardingStatus: onboardingState.status,
+        onboardingSteps: onboardingState.steps as Record<string, boolean>,
+      },
     ],
   };
 }
