@@ -28,13 +28,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = React.useState(!USE_MOCK);
 
   React.useEffect(() => {
-    if (USE_MOCK || !supabase) return;
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
+    if (USE_MOCK) return; // mock: loading already false
+    if (!supabase) {
+      // Misconfigured (no Supabase env) — don't hang on the spinner.
       setLoading(false);
+      return;
+    }
+    let active = true;
+    supabase.auth
+      .getSession()
+      .then(({ data }) => {
+        if (active) setSession(data.session);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => {
+      if (active) setSession(s);
     });
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => setSession(s));
-    return () => sub.subscription.unsubscribe();
+    return () => {
+      active = false;
+      sub.subscription.unsubscribe();
+    };
   }, []);
 
   const signIn = React.useCallback(async (email: string, password: string) => {
