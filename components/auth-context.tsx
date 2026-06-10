@@ -1,12 +1,18 @@
 "use client";
 
 import * as React from "react";
-import type { Session } from "@supabase/supabase-js";
-import { supabase } from "@/lib/supabase";
-import { USE_MOCK } from "@/lib/api";
+import {
+  authLogin,
+  authLogout,
+  authMe,
+  authSignup,
+  hasSession,
+  USE_MOCK,
+  type AuthUser,
+} from "@/lib/api";
 
 type AuthState = {
-  session: Session | null;
+  user: AuthUser | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (args: {
@@ -14,71 +20,63 @@ type AuthState = {
     password: string;
     name: string;
     phone?: string;
-  }) => Promise<{ needsVerification: boolean }>;
+  }) => Promise<void>;
   signOut: () => Promise<void>;
 };
 
-// In mock mode we pretend the user is always signed in.
-const FAKE_SESSION = { access_token: "mock", user: { id: "mock", email: "demo@bond.app" } } as unknown as Session;
+const FAKE_USER: AuthUser = { id: "mock", email: "demo@bond.app", role: "owner" };
 
 const AuthContext = React.createContext<AuthState | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [session, setSession] = React.useState<Session | null>(USE_MOCK ? FAKE_SESSION : null);
+  const [user, setUser] = React.useState<AuthUser | null>(USE_MOCK ? FAKE_USER : null);
   const [loading, setLoading] = React.useState(!USE_MOCK);
 
   React.useEffect(() => {
-    if (USE_MOCK) return; // mock: loading already false
-    if (!supabase) {
-      // Misconfigured (no Supabase env) — don't hang on the spinner.
+    if (USE_MOCK) return;
+    if (!hasSession()) {
       setLoading(false);
       return;
     }
     let active = true;
-    supabase.auth
-      .getSession()
-      .then(({ data }) => {
-        if (active) setSession(data.session);
-      })
-      .catch(() => {})
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => {
-      if (active) setSession(s);
-    });
+    authMe()
+      .then((u) => active && setUser(u))
+      .catch(() => active && setUser(null))
+      .finally(() => active && setLoading(false));
     return () => {
       active = false;
-      sub.subscription.unsubscribe();
     };
   }, []);
 
   const signIn = React.useCallback(async (email: string, password: string) => {
-    if (USE_MOCK || !supabase) return;
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) throw new Error(error.message);
+    if (USE_MOCK) {
+      setUser(FAKE_USER);
+      return;
+    }
+    const { user: u } = await authLogin(email, password);
+    setUser(u);
   }, []);
 
   const signUp = React.useCallback<AuthState["signUp"]>(async ({ email, password, name, phone }) => {
-    if (USE_MOCK || !supabase) return { needsVerification: false };
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: { data: { name, phone } },
-    });
-    if (error) throw new Error(error.message);
-    // No session back => email confirmation required.
-    return { needsVerification: !data.session };
+    if (USE_MOCK) {
+      setUser(FAKE_USER);
+      return;
+    }
+    await authSignup({ email, password, username: name, phone });
+    // Per the contract, log in after signup to obtain a session token.
+    const { user: u } = await authLogin(email, password);
+    setUser(u);
   }, []);
 
   const signOut = React.useCallback(async () => {
-    if (USE_MOCK || !supabase) return;
-    await supabase.auth.signOut();
+    setUser(null);
+    if (USE_MOCK) return;
+    await authLogout();
   }, []);
 
   const value = React.useMemo<AuthState>(
-    () => ({ session, loading, signIn, signUp, signOut }),
-    [session, loading, signIn, signUp, signOut]
+    () => ({ user, loading, signIn, signUp, signOut }),
+    [user, loading, signIn, signUp, signOut]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -101,6 +101,15 @@ export interface TicketFilters {
   offset?: number;
 }
 
+// POST /api/auth/login -> data.user
+export interface AuthUser {
+  id: string;
+  email: string;
+  role?: string;
+  username?: string | null;
+  [k: string]: unknown;
+}
+
 // GET /api/partner/me -> data  (the companies the logged-in user belongs to)
 export interface Membership {
   id: string; // partner/company id

@@ -32,14 +32,14 @@ const STEPS: { key: OnboardingStep; title: string; icon: typeof Building2 }[] = 
 
 export default function OnboardingPage() {
   const router = useRouter();
-  const { session, loading: authLoading } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const { partner, onboarding, loading, refresh } = usePartner();
   const [ob, setOb] = React.useState<Onboarding | null>(onboarding);
 
   React.useEffect(() => setOb(onboarding), [onboarding]);
   React.useEffect(() => {
-    if (!authLoading && !session) router.replace("/login");
-  }, [authLoading, session, router]);
+    if (!authLoading && !user) router.replace("/login");
+  }, [authLoading, user, router]);
 
   const done = ob?.status === "complete" || ob?.status === "live";
   const current = STEPS.find((s) => !ob?.steps?.[s.key])?.key ?? null;

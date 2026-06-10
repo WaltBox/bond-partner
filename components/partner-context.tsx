@@ -29,7 +29,7 @@ const PartnerContext = React.createContext<PartnerState | null>(null);
  * active partner for all subsequent calls, and loads its profile + onboarding.
  */
 export function PartnerProvider({ children }: { children: React.ReactNode }) {
-  const { session } = useAuth();
+  const { user } = useAuth();
   const [partners, setPartners] = React.useState<Membership[]>([]);
   const [partner, setPartner] = React.useState<PartnerInfo | null>(null);
   const [onboarding, setOnboarding] = React.useState<Onboarding | null>(null);
@@ -39,7 +39,7 @@ export function PartnerProvider({ children }: { children: React.ReactNode }) {
   const [nonce, setNonce] = React.useState(0);
 
   React.useEffect(() => {
-    if (!session) {
+    if (!user) {
       setActivePartnerId(null);
       setPartners([]);
       setPartner(null);
@@ -88,7 +88,7 @@ export function PartnerProvider({ children }: { children: React.ReactNode }) {
     return () => {
       alive = false;
     };
-  }, [session, selectedId, nonce]);
+  }, [user, selectedId, nonce]);
 
   const value = React.useMemo<PartnerState>(
     () => ({

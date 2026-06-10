@@ -3,9 +3,13 @@
  * NEXT_PUBLIC_USE_MOCK. Screens import only from here.
  */
 
-import { bondFetch, partnerPath, USE_MOCK } from "./client";
+import { bondFetch, partnerPath, saveSession, clearTokens, USE_MOCK } from "./client";
 import * as mock from "./mock";
 import type {
+  AuthSession,
+} from "./client";
+import type {
+  AuthUser,
   DashboardData,
   Membership,
   Offer,
@@ -20,7 +24,50 @@ import type {
 } from "./types";
 
 export * from "./types";
-export { USE_MOCK, ApiError, setActivePartnerId, getActivePartnerId } from "./client";
+export {
+  USE_MOCK,
+  ApiError,
+  setActivePartnerId,
+  getActivePartnerId,
+  hasSession,
+  clearTokens,
+} from "./client";
+
+// ── Auth (bond-api) ──────────────────────────────────────────────────────────
+
+export async function authLogin(
+  email: string,
+  password: string
+): Promise<{ user: AuthUser; session: AuthSession }> {
+  const data = await bondFetch<{ user: AuthUser; session: AuthSession }>(`/auth/login`, {
+    method: "POST",
+    body: JSON.stringify({ email, password }),
+  });
+  saveSession(data.session);
+  return data;
+}
+
+export function authSignup(body: {
+  email: string;
+  password: string;
+  username?: string;
+  phone?: string;
+}): Promise<unknown> {
+  return bondFetch(`/auth/signup`, { method: "POST", body: JSON.stringify(body) });
+}
+
+export function authMe(): Promise<AuthUser> {
+  return bondFetch<AuthUser>(`/auth/me`);
+}
+
+export async function authLogout(): Promise<void> {
+  try {
+    await bondFetch(`/auth/logout`, { method: "POST" });
+  } catch {
+    /* ignore */
+  }
+  clearTokens();
+}
 
 // ── Identity / onboarding (not partner-scoped) ───────────────────────────────
 

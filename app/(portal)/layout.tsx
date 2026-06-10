@@ -11,22 +11,22 @@ import { usePartner } from "@/components/partner-context";
 
 export default function PortalLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const { session, loading: authLoading, signOut } = useAuth();
+  const { user, loading: authLoading, signOut } = useAuth();
   const { partners, onboarding, loading: pLoading, error } = usePartner();
 
   const needsOnboarding =
     !!onboarding && onboarding.status !== "complete" && onboarding.status !== "live";
 
   React.useEffect(() => {
-    if (!authLoading && !session) router.replace("/login");
-  }, [authLoading, session, router]);
+    if (!authLoading && !user) router.replace("/login");
+  }, [authLoading, user, router]);
 
   React.useEffect(() => {
-    if (session && !pLoading && needsOnboarding) router.replace("/onboarding");
-  }, [session, pLoading, needsOnboarding, router]);
+    if (user && !pLoading && needsOnboarding) router.replace("/onboarding");
+  }, [user, pLoading, needsOnboarding, router]);
 
   // Loading / redirecting states
-  if (authLoading || !session || (pLoading && partners.length === 0)) return <FullSpinner />;
+  if (authLoading || !user || (pLoading && partners.length === 0)) return <FullSpinner />;
   if (error) return <FullMessage icon={AlertCircle} title="Couldn't load your account" body={error} />;
   if (!pLoading && partners.length === 0)
     return (

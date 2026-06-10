@@ -11,15 +11,15 @@ import { useAuth } from "@/components/auth-context";
 
 export default function LoginPage() {
   const router = useRouter();
-  const { session, signIn } = useAuth();
+  const { user, signIn } = useAuth();
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [error, setError] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState(false);
 
   React.useEffect(() => {
-    if (session) router.replace("/dashboard");
-  }, [session, router]);
+    if (user) router.replace("/dashboard");
+  }, [user, router]);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
