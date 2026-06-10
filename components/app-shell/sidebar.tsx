@@ -7,14 +7,13 @@ import { cn } from "@/lib/utils";
 import { BondLogo } from "./logo";
 
 const nav = [
-  { label: "Dashboard", href: "/", icon: LayoutDashboard },
+  { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { label: "Tickets", href: "/tickets", icon: Receipt },
   { label: "Billing", href: "/billing", icon: FileText },
   { label: "Settings", href: "/settings", icon: Settings },
 ];
 
 function isActive(pathname: string, href: string) {
-  if (href === "/") return pathname === "/";
   return pathname === href || pathname.startsWith(href + "/");
 }
 
@@ -24,7 +23,7 @@ export function Sidebar() {
   return (
     <aside className="hidden w-60 shrink-0 flex-col border-r border-border bg-card/60 lg:flex">
       <div className="flex h-16 items-center px-6">
-        <Link href="/" aria-label="Bond home">
+        <Link href="/dashboard" aria-label="Dashboard">
           <BondLogo />
         </Link>
       </div>

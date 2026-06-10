@@ -18,7 +18,7 @@ export default function LoginPage() {
   const [busy, setBusy] = React.useState(false);
 
   React.useEffect(() => {
-    if (session) router.replace("/");
+    if (session) router.replace("/dashboard");
   }, [session, router]);
 
   async function onSubmit(e: React.FormEvent) {
@@ -27,7 +27,7 @@ export default function LoginPage() {
     setBusy(true);
     try {
       await signIn(email.trim(), password);
-      router.replace("/");
+      router.replace("/dashboard");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Couldn't sign in");
       setBusy(false);

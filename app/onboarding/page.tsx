@@ -94,7 +94,7 @@ export default function OnboardingPage() {
             <Finished
               onGo={() => {
                 refresh();
-                router.push("/");
+                router.push("/dashboard");
               }}
             />
           ) : current === "profile" ? (

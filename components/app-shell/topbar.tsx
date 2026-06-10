@@ -20,7 +20,7 @@ import { BondLogo } from "./logo";
 import { cn } from "@/lib/utils";
 
 const mobileNav = [
-  { label: "Dashboard", href: "/", icon: LayoutDashboard },
+  { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { label: "Tickets", href: "/tickets", icon: Receipt },
   { label: "Billing", href: "/billing", icon: FileText },
   { label: "Settings", href: "/settings", icon: Settings },
@@ -49,7 +49,7 @@ export function Topbar() {
           </SheetHeader>
           <nav className="space-y-1 p-3">
             {mobileNav.map(({ label, href, icon: Icon }) => {
-              const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
+              const active = pathname === href || pathname.startsWith(href + "/");
               return (
                 <SheetClose asChild key={href}>
                   <Link
