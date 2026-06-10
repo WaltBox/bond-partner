@@ -103,7 +103,9 @@ export async function bondFetch<T>(path: string, init?: RequestInit, retried = f
   if (!res.ok || body.error) {
     throw new ApiError(body.error ?? `Request failed (${res.status})`, res.status, body.details);
   }
-  return body.data as T;
+  // Most endpoints use the { data } envelope; a few (e.g. /auth/me) return the
+  // payload directly — tolerate both.
+  return (body.data !== undefined ? body.data : (body as unknown)) as T;
 }
 
 /** Build a partner-scoped path, requiring an active partner id. */

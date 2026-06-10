@@ -57,7 +57,8 @@ export function authSignup(body: {
 }
 
 export function authMe(): Promise<AuthUser> {
-  return bondFetch<AuthUser>(`/auth/me`);
+  // /auth/me returns { user, ... } (consumer "me"); accept either shape.
+  return bondFetch<{ user?: AuthUser } & AuthUser>(`/auth/me`).then((r) => (r.user ?? r) as AuthUser);
 }
 
 export async function authLogout(): Promise<void> {

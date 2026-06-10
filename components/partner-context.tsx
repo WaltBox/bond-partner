@@ -52,10 +52,20 @@ export function PartnerProvider({ children }: { children: React.ReactNode }) {
     setLoading(true);
     setError(null);
     (async () => {
-      const me = await getMe();
+      // Discover the user's company via /api/partner/me. That route isn't live
+      // yet, so fall back to a configured partner id when it 404s (temporary —
+      // remove once /api/partner/me ships).
+      let list: Membership[];
+      try {
+        list = (await getMe()).partners;
+      } catch (err) {
+        const fallback = process.env.NEXT_PUBLIC_FALLBACK_PARTNER_ID;
+        if (!fallback) throw err;
+        list = [{ id: fallback, name: null, role: "owner" }];
+      }
       if (!alive) return;
-      setPartners(me.partners);
-      const chosen = me.partners.find((p) => p.id === selectedId) ?? me.partners[0] ?? null;
+      setPartners(list);
+      const chosen = list.find((p) => p.id === selectedId) ?? list[0] ?? null;
       if (!chosen) {
         setActivePartnerId(null);
         setPartner(null);
