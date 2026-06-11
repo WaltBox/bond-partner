@@ -1,79 +1,32 @@
 "use client";
 
 import * as React from "react";
-import {
-  Users,
-  Utensils,
-  ScanLine,
-  BadgeCheck,
-  HandCoins,
-  ChevronDown,
-} from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ChevronDown } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
 import { PageHeader } from "@/components/page-header";
 import { cn } from "@/lib/utils";
 
-const STEPS = [
-  {
-    icon: Users,
-    title: "Your crew makes a plan",
-    body: "A diner opens Bond and invites people to eat at your spot. That creates a ticket — the redemption — with the party on it (counts only, never names). Say 2 diners are on it.",
-  },
-  {
-    icon: Utensils,
-    title: "They eat & pay full price",
-    body: "The table orders and pays like any other guest — full price, straight into your register. Nothing is discounted at the counter.",
-  },
-  {
-    icon: ScanLine,
-    title: "They scan the receipt",
-    body: "The receipt is scanned against that ticket and AI-parsed into line items — so Bond can see exactly what was bought.",
-  },
-  {
-    icon: BadgeCheck,
-    title: "Bond checks the promo",
-    body: "The receipt has to hit the promo's threshold. A 2-person ticket on “Buy 3 Tacos, Get 1 Paid Back” needs 9 tacos on it for 2 to qualify. Miss the threshold and nothing fires.",
-  },
-  {
-    icon: HandCoins,
-    title: "Cashback goes back",
-    body: "If it qualifies, the cashback on those 2 tacos is paid to the diners on the ticket. If it doesn't, there's no payback — and you owe nothing.",
-  },
-];
-
 const FAQS: { q: string; a: React.ReactNode }[] = [
   {
-    q: "What's actually a “ticket”?",
+    q: "Won't people just get cashback on meals they'd buy anyway?",
     a: (
       <>
-        A ticket is the redemption created in the Bond app <strong>before the meal</strong> — when a
-        diner invites their crew to eat at your spot. It locks in who's on the visit (a count, no
-        names) and which promo applies, so the reward is tied to a real, planned group outing.
-      </>
-    ),
-  },
-  {
-    q: "What stops people just getting cashback on a meal they'd buy anyway?",
-    a: (
-      <>
-        Three things work together:
+        No — the reward is gated. Three things work together:
         <ul className="mt-2 list-disc space-y-1.5 pl-5">
           <li>
-            The ticket is created <strong>up front as a group plan</strong> — Bond rewards bringing
-            people in, not a walk-in grabbing a discount after the fact.
+            The ticket is created <strong>up front as a group plan</strong>, before anyone eats — Bond
+            rewards bringing people in, not a walk-in grabbing a discount after the fact.
           </li>
           <li>
-            Cashback only fires when the receipt <strong>hits the promo's threshold</strong> (e.g. 9
-            tacos for 2 paybacks), so they have to actually buy the qualifying items — more than a
-            casual visit.
+            Cashback only fires when the receipt <strong>clears the promo's threshold</strong> (e.g. 9
+            tacos for 2 paybacks), so the group has to actually buy the qualifying items.
           </li>
           <li>
             Most of the payback is the diners' <strong>own extra spend cycling back</strong> (a
             pass-through). Your real cost is just the food you comped.
           </li>
         </ul>
-        Net: you're filling tables with incremental group spend — not handing your regulars a random
-        discount.
+        Net: you're filling tables with incremental group spend — not discounting your regulars.
       </>
     ),
   },
@@ -81,9 +34,39 @@ const FAQS: { q: string; a: React.ReactNode }[] = [
     q: "How does the cashback actually get triggered?",
     a: (
       <>
-        Nothing pays out until the receipt is scanned and checked against the ticket. The promo sets
-        the threshold; if the receipt meets it, the cashback on the qualifying items is distributed to
-        the diners on that ticket. If it doesn't, no payback fires and you owe nothing.
+        Nothing pays out until the receipt is scanned and checked against the ticket. If it clears the
+        promo's threshold, the cashback on the qualifying items is split to the diners on that ticket.
+        If it doesn't, no payback fires and you owe nothing.
+      </>
+    ),
+  },
+  {
+    q: "What stops the same receipt being claimed twice?",
+    a: (
+      <>
+        Every scanned receipt gets a unique <strong>fingerprint</strong> — a one-way signature built
+        from three things: the <strong>merchant</strong>, the <strong>purchase time</strong> (down to
+        the minute), and the <strong>exact total</strong>. If the same receipt is submitted again — by
+        accident, or by two people trying to claim the same bill — the fingerprints match and the
+        ticket is <strong>flagged for review</strong>.
+        <p className="mt-2">
+          It&apos;s never an auto-reject (a rare coincidence is technically possible), but two truly
+          separate visits almost always differ in total or time, so real visits don&apos;t collide.
+          Re-scanning the <em>same</em> ticket is fine — only a <em>different</em> ticket presenting the
+          same receipt counts as a duplicate. And it sticks: receipt photos are purged after 90 days,
+          but the fingerprint is kept, so duplicate detection still works long after the image is gone.
+        </p>
+      </>
+    ),
+  },
+  {
+    q: "What if everyone in the group uploads their own receipt?",
+    a: (
+      <>
+        All good. When each person uploads their own separate check, the totals differ → different
+        fingerprints → every one goes through. But if two people upload the <strong>same</strong>{" "}
+        receipt, it&apos;s an instant collision → flagged. That&apos;s the built-in within-group
+        safeguard.
       </>
     ),
   },
@@ -91,10 +74,10 @@ const FAQS: { q: string; a: React.ReactNode }[] = [
     q: "What does it actually cost me?",
     a: (
       <>
-        You settle the payback with Bond, but it's funded by the extra spend diners made to qualify —
-        a <strong>pass-through</strong>. Your real out-of-pocket is the cost-to-make of the comped
-        items, which shows up as <strong>True Cost</strong> on your dashboard. Set your cost-to-make
-        in Settings so those numbers are accurate.
+        You settle the payback with Bond, but it&apos;s funded by the extra spend diners made to
+        qualify — a <strong>pass-through</strong>. Your real out-of-pocket is the cost-to-make of the
+        comped items, shown as <strong>True Cost</strong> on your dashboard. Set your cost-to-make in
+        Settings so those numbers are accurate.
       </>
     ),
   },
@@ -103,7 +86,7 @@ const FAQS: { q: string; a: React.ReactNode }[] = [
     a: (
       <>
         No. Bond is <strong>counts only</strong> — you see party size and totals, never names, emails,
-        or any personal info. Diner privacy is never shared with partners.
+        or any personal info.
       </>
     ),
   },
@@ -112,7 +95,7 @@ const FAQS: { q: string; a: React.ReactNode }[] = [
     a: (
       <>
         Open it in <strong>Tickets</strong> and hit “Dispute this ticket.” Bond reviews the scanned
-        receipt and follows up — owed amounts pause while it's looked into.
+        receipt and follows up — owed amounts pause while it&apos;s looked into.
       </>
     ),
   },
@@ -123,35 +106,8 @@ export default function FaqPage() {
     <div className="animate-fade-in">
       <PageHeader title="FAQ" description="How Bond's ticketing works — and why it works for you." />
 
-      {/* How a ticket works */}
-      <Card className="mb-4">
-        <CardHeader>
-          <CardTitle>How a Bond ticket works</CardTitle>
-          <p className="text-sm text-muted-foreground">From plan to payback, step by step.</p>
-        </CardHeader>
-        <CardContent>
-          <ol className="relative space-y-5 before:absolute before:left-[18px] before:top-2 before:h-[calc(100%-2.5rem)] before:w-px before:bg-border">
-            {STEPS.map((s, i) => (
-              <li key={i} className="relative flex gap-4">
-                <span className="z-10 flex size-9 shrink-0 items-center justify-center rounded-full border border-border bg-card text-primary shadow-sm">
-                  <s.icon className="size-[18px]" />
-                </span>
-                <div className="pt-1">
-                  <p className="font-display text-[15px] font-bold text-foreground">{s.title}</p>
-                  <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{s.body}</p>
-                </div>
-              </li>
-            ))}
-          </ol>
-        </CardContent>
-      </Card>
-
-      {/* Q&A */}
       <Card>
-        <CardHeader>
-          <CardTitle>Common questions</CardTitle>
-        </CardHeader>
-        <CardContent className="pt-0">
+        <CardContent className="py-1">
           <div className="divide-y divide-border/70">
             {FAQS.map((f, i) => (
               <FaqItem key={i} q={f.q}>
@@ -175,13 +131,18 @@ function FaqItem({ q, children }: { q: string; children: React.ReactNode }) {
         aria-expanded={open}
         className="flex w-full items-center justify-between gap-4 py-4 text-left"
       >
-        <span className="font-display text-[15px] font-bold text-foreground">{q}</span>
-        <ChevronDown
-          className={cn("size-5 shrink-0 text-muted-foreground transition-transform", open && "rotate-180")}
-        />
+        <span className="text-[15px] font-semibold text-foreground">{q}</span>
+        <span
+          className={cn(
+            "flex size-6 shrink-0 items-center justify-center rounded-full border border-border text-muted-foreground transition-transform",
+            open && "rotate-180 border-primary/30 text-primary"
+          )}
+        >
+          <ChevronDown className="size-4" />
+        </span>
       </button>
       {open ? (
-        <div className="pb-4 pr-8 text-sm leading-relaxed text-muted-foreground">{children}</div>
+        <div className="pb-4 pr-9 text-sm leading-relaxed text-muted-foreground">{children}</div>
       ) : null}
     </div>
   );
