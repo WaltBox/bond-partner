@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Menu, LogOut, LayoutDashboard, Receipt, FileText, Settings } from "lucide-react";
+import { Menu, LogOut, LayoutDashboard, Receipt, FileText, Settings, HelpCircle } from "lucide-react";
 import {
   Sheet,
   SheetContent,
@@ -22,6 +22,7 @@ const mobileNav = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { label: "Tickets", href: "/tickets", icon: Receipt },
   { label: "Billing", href: "/billing", icon: FileText },
+  { label: "FAQ", href: "/faq", icon: HelpCircle },
   { label: "Settings", href: "/settings", icon: Settings },
 ];
 
