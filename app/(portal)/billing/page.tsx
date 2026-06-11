@@ -89,7 +89,7 @@ export default function BillingPage() {
                   <p className="text-sm font-medium text-muted-foreground">Amount owed</p>
                   <InfoTip label="What you settle with Bond for paybacks delivered to diners. It's funded by the extra spend diners made to earn those paybacks — so most of it passes through rather than coming out of your pocket." />
                 </div>
-                <p className="mt-2 text-4xl font-semibold tracking-tight text-foreground tabular">
+                <p className="mt-2 font-display text-4xl font-extrabold tracking-tight text-foreground tabular">
                   {formatCentsWhole(totalOwed)}
                 </p>
                 <p className="mt-1 text-sm text-muted-foreground">across your Bond visits</p>

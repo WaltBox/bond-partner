@@ -64,6 +64,8 @@ const config: Config = {
       },
       fontFamily: {
         sans: ["var(--font-sans)", "system-ui", "sans-serif"],
+        display: ["var(--font-baloo)", "var(--font-sans)", "system-ui", "sans-serif"],
+        accent: ["var(--font-caveat)", "cursive"],
       },
       keyframes: {
         "accordion-down": {

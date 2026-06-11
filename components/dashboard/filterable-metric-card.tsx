@@ -69,7 +69,7 @@ export function FilterableMetricCard({
           <p className="mt-1 text-[26px] font-semibold leading-tight tracking-tight text-muted-foreground">—</p>
         )
       ) : (
-        <p className="mt-1 text-[26px] font-semibold leading-tight tracking-tight text-foreground tabular">
+        <p className="mt-1 font-display text-[27px] font-extrabold leading-tight tracking-tight text-foreground tabular">
           {formatCentsWhole(value)}
         </p>
       )}

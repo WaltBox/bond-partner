@@ -32,7 +32,7 @@ export function OwedCostCard({
         <p className="text-sm font-medium text-muted-foreground">Paid Back</p>
         <InfoTip label="Cash your diners got back this period, funded by their own spend. You settle it with Bond monthly — it's not a fee on your sales." />
       </div>
-      <p className="mt-1 text-[26px] font-semibold leading-tight tracking-tight text-foreground tabular">
+      <p className="mt-1 font-display text-[27px] font-extrabold leading-tight tracking-tight text-foreground tabular">
         {formatCentsWhole(owedCents)}
       </p>
 
