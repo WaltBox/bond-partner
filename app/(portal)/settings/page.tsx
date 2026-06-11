@@ -11,13 +11,27 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/page-header";
 import { PartnerAvatar } from "@/components/partner-avatar";
+import { useAuth } from "@/components/auth-context";
 import { getSettings, patchOffer, type Offer } from "@/lib/api";
 import { useAsync } from "@/lib/api/use-async";
 import { formatCents } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
+function initials(s: string) {
+  return (
+    s
+      .split(/[\s@.]+/)
+      .filter(Boolean)
+      .map((w) => w[0])
+      .slice(0, 2)
+      .join("")
+      .toUpperCase() || "?"
+  );
+}
+
 export default function SettingsPage() {
   const { data, loading, error, reload } = useAsync(() => getSettings(), []);
+  const { user } = useAuth();
 
   return (
     <div className="animate-fade-in">
@@ -58,6 +72,37 @@ export default function SettingsPage() {
                   <Field icon={Tag} label="Category" value={data.partner.category ?? "—"} />
                 </div>
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Team */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Team</CardTitle>
+              <CardDescription>People with access to this Bond portal.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {user ? (
+                <div className="flex items-center justify-between gap-3 rounded-lg border border-border/70 p-3">
+                  <div className="flex items-center gap-3">
+                    <div className="flex size-10 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
+                      {initials((user.username as string) || user.email)}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-foreground">
+                        {(user.username as string) || user.email}
+                      </p>
+                      <p className="truncate text-xs text-muted-foreground">{user.email}</p>
+                    </div>
+                  </div>
+                  <Badge variant="secondary" className="capitalize">
+                    {user.role ?? "member"}
+                  </Badge>
+                </div>
+              ) : null}
+              <p className="mt-3 text-xs text-muted-foreground">
+                Team management is handled by the Bond team — reach out to add or remove access.
+              </p>
             </CardContent>
           </Card>
 

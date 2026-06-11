@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Menu, LayoutDashboard, Receipt, FileText, Settings, LogOut } from "lucide-react";
+import { Menu, LogOut, LayoutDashboard, Receipt, FileText, Settings } from "lucide-react";
 import {
   Sheet,
   SheetContent,
@@ -12,7 +12,6 @@ import {
   SheetClose,
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
 import { usePartner } from "@/components/partner-context";
 import { useAuth } from "@/components/auth-context";
 import { PartnerAvatar } from "@/components/partner-avatar";
@@ -26,18 +25,18 @@ const mobileNav = [
   { label: "Settings", href: "/settings", icon: Settings },
 ];
 
+/** Mobile-only header. On desktop the sidebar carries the nav + account. */
 export function Topbar() {
   const pathname = usePathname();
   const router = useRouter();
-  const { partner, loading } = usePartner();
+  const { partner } = usePartner();
   const { signOut } = useAuth();
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-border bg-background/80 px-4 backdrop-blur-md sm:px-6">
-      {/* Mobile menu */}
+    <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-border bg-background/80 px-4 backdrop-blur-md lg:hidden">
       <Sheet>
         <SheetTrigger asChild>
-          <Button variant="ghost" size="icon" className="lg:hidden" aria-label="Open menu">
+          <Button variant="ghost" size="icon" aria-label="Open menu">
             <Menu className="size-5" />
           </Button>
         </SheetTrigger>
@@ -56,10 +55,10 @@ export function Topbar() {
                     href={href}
                     className={cn(
                       "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium",
-                      active ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-secondary"
+                      active ? "bg-secondary text-foreground" : "text-muted-foreground hover:bg-secondary"
                     )}
                   >
-                    <Icon className="size-[18px]" />
+                    <Icon className={cn("size-[18px]", active && "text-primary")} />
                     {label}
                   </Link>
                 </SheetClose>
@@ -69,31 +68,16 @@ export function Topbar() {
         </SheetContent>
       </Sheet>
 
-      {/* Account chip */}
-      <div className="ml-auto flex items-center gap-3">
-        <div className="text-right leading-tight">
-          {loading ? (
-            <>
-              <Skeleton className="ml-auto h-4 w-24" />
-              <Skeleton className="ml-auto mt-1 h-3 w-16" />
-            </>
-          ) : (
-            <>
-              <p className="text-sm font-semibold text-foreground">{partner?.name ?? "—"}</p>
-              <p className="text-xs capitalize text-muted-foreground">{partner?.category ?? "Partner"}</p>
-            </>
-          )}
-        </div>
-        <PartnerAvatar
-          name={partner?.name}
-          logoUrl={partner?.logoUrl}
-          className="size-9 rounded-lg text-sm"
-        />
+      <Link href="/dashboard" aria-label="Dashboard">
+        <BondLogo />
+      </Link>
+
+      <div className="ml-auto flex items-center gap-2">
+        <PartnerAvatar name={partner?.name} logoUrl={partner?.logoUrl} className="size-8 rounded-lg text-xs" />
         <Button
           variant="ghost"
           size="icon"
           aria-label="Sign out"
-          title="Sign out"
           onClick={() => signOut().then(() => router.replace("/login"))}
         >
           <LogOut className="size-[18px]" />
