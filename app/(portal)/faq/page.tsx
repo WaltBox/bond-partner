@@ -50,9 +50,8 @@ const FAQS: { q: string; a: React.ReactNode }[] = [
         accident, or by two people trying to claim the same bill — the fingerprints match and the
         ticket is <strong>flagged for review</strong>.
         <p className="mt-2">
-          It&apos;s never an auto-reject (a rare coincidence is technically possible), but two truly
-          separate visits almost always differ in total or time, so real visits don&apos;t collide.
-          Re-scanning the <em>same</em> ticket is fine — only a <em>different</em> ticket presenting the
+          Real visits won&apos;t collide — two separate visits almost always differ in total or time.
+          Re-scanning the <em>same</em> ticket is fine; only a <em>different</em> ticket presenting the
           same receipt counts as a duplicate. And it sticks: receipt photos are purged after 90 days,
           but the fingerprint is kept, so duplicate detection still works long after the image is gone.
         </p>
