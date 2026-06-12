@@ -81,10 +81,14 @@ export async function partnerJoin(body: {
   username?: string;
 }): Promise<{ user: AuthUser; session: AuthSession }> {
   if (USE_MOCK) return mock.partnerJoin(body);
-  const data = await bondFetch<{ user: AuthUser; session: AuthSession }>(`/partner/join`, {
-    method: "POST",
-    body: JSON.stringify(body),
-  });
+  // Unauthenticated endpoint: drop any stale session so a dead token can't 401
+  // the request, and don't send a bearer header.
+  clearTokens();
+  const data = await bondFetch<{ user: AuthUser; session: AuthSession }>(
+    `/partner/join`,
+    { method: "POST", body: JSON.stringify(body) },
+    { auth: false }
+  );
   saveSession(data.session);
   return data;
 }

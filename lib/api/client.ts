@@ -77,9 +77,16 @@ async function tryRefresh(): Promise<boolean> {
 }
 
 /** Fetch `${BASE}/api${path}`, attach the bearer token, refresh once on 401,
- *  unwrap `{ data }`, throw ApiError on `{ error }` or non-2xx. */
-export async function bondFetch<T>(path: string, init?: RequestInit, retried = false): Promise<T> {
-  const token = getAccessToken();
+ *  unwrap `{ data }`, throw ApiError on `{ error }` or non-2xx.
+ *  Pass `{ auth: false }` for unauthenticated endpoints (e.g. /partner/join):
+ *  any stale token is left off so a dead session can't 401 the request. */
+export async function bondFetch<T>(
+  path: string,
+  init?: RequestInit,
+  opts: { auth?: boolean; retried?: boolean } = {}
+): Promise<T> {
+  const { auth = true, retried = false } = opts;
+  const token = auth ? getAccessToken() : null;
   const res = await fetch(`${BASE}/api${path}`, {
     ...init,
     headers: {
@@ -89,8 +96,8 @@ export async function bondFetch<T>(path: string, init?: RequestInit, retried = f
     },
   });
 
-  if (res.status === 401 && !retried && !path.startsWith("/auth/") && getRefreshToken()) {
-    if (await tryRefresh()) return bondFetch<T>(path, init, true);
+  if (res.status === 401 && auth && !retried && !path.startsWith("/auth/") && getRefreshToken()) {
+    if (await tryRefresh()) return bondFetch<T>(path, init, { auth, retried: true });
   }
 
   let json: unknown = null;
