@@ -6,47 +6,45 @@ import { Loader2, AlertCircle } from "lucide-react";
 import { AuthShell } from "@/components/auth-shell";
 import { StickerButton, BrandField } from "@/components/brand";
 import { useAuth } from "@/components/auth-context";
-import { joinPartner } from "@/lib/api";
+import { ApiError } from "@/lib/api";
 
 function JoinInner() {
   const router = useRouter();
   const params = useSearchParams();
   const token = params.get("token");
-  const { user, signUp } = useAuth();
+  const { user, joinWithToken } = useAuth();
 
-  const [form, setForm] = React.useState({ name: "", email: "", phone: "", password: "" });
+  const [form, setForm] = React.useState({ name: "", email: "", password: "" });
   const [error, setError] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState(false);
-  const redeemed = React.useRef(false);
 
+  // Once we have a session, hand off to the portal — it resolves the company via
+  // GET /api/partner/me and routes through onboarding as needed.
   React.useEffect(() => {
-    if (!user || redeemed.current) return;
-    redeemed.current = true;
-    (async () => {
-      try {
-        if (token) await joinPartner(token);
-      } catch {
-        /* already a member, or invalid token — continue regardless */
-      }
-      router.replace("/onboarding");
-    })();
-  }, [user, token, router]);
+    if (user) router.replace("/dashboard");
+  }, [user, router]);
 
   const set = (k: keyof typeof form) => (v: string) => setForm((f) => ({ ...f, [k]: v }));
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (!token) return;
     setError(null);
     setBusy(true);
     try {
-      await signUp({
+      await joinWithToken({
+        token,
         email: form.email.trim(),
         password: form.password,
-        name: form.name.trim(),
-        phone: form.phone.trim() || undefined,
+        username: form.name.trim() || undefined,
       });
-      // user is set → the effect redeems the token + routes to onboarding.
+      // user is set → the effect routes to the portal.
     } catch (err) {
+      if (err instanceof ApiError && err.status === 409) {
+        // Account already exists — send them to sign in instead.
+        router.replace(`/login?email=${encodeURIComponent(form.email.trim())}`);
+        return;
+      }
       setError(err instanceof Error ? err.message : "Couldn't create your account");
       setBusy(false);
     }
@@ -73,7 +71,6 @@ function JoinInner() {
       <form onSubmit={onSubmit} className="space-y-4">
         <BrandField id="name" label="Your name" value={form.name} onChange={set("name")} />
         <BrandField id="email" label="Email" type="email" value={form.email} onChange={set("email")} />
-        <BrandField id="phone" label="Phone (optional)" type="tel" value={form.phone} onChange={set("phone")} required={false} />
         <BrandField id="password" label="Password" type="password" value={form.password} onChange={set("password")} />
         {error ? <p className="text-sm font-semibold text-[#FF4D6D]">{error}</p> : null}
         <StickerButton type="submit" full disabled={busy || !token}>

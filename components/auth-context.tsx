@@ -5,7 +5,7 @@ import {
   authLogin,
   authLogout,
   authMe,
-  authSignup,
+  partnerJoin,
   hasSession,
   USE_MOCK,
   type AuthUser,
@@ -15,11 +15,12 @@ type AuthState = {
   user: AuthUser | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (args: {
+  /** Redeem an invite token: create the account, join the company, and log in. */
+  joinWithToken: (args: {
+    token: string;
     email: string;
     password: string;
-    name: string;
-    phone?: string;
+    username?: string;
   }) => Promise<void>;
   signOut: () => Promise<void>;
 };
@@ -57,14 +58,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(u);
   }, []);
 
-  const signUp = React.useCallback<AuthState["signUp"]>(async ({ email, password, name, phone }) => {
+  const joinWithToken = React.useCallback<AuthState["joinWithToken"]>(async ({ token, email, password, username }) => {
     if (USE_MOCK) {
       setUser(FAKE_USER);
       return;
     }
-    await authSignup({ email, password, username: name, phone });
-    // Per the contract, log in after signup to obtain a session token.
-    const { user: u } = await authLogin(email, password);
+    // One partner call: creates the account, joins the company, returns a session.
+    const { user: u } = await partnerJoin({ token, email, password, username });
     setUser(u);
   }, []);
 
@@ -75,8 +75,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const value = React.useMemo<AuthState>(
-    () => ({ user, loading, signIn, signUp, signOut }),
-    [user, loading, signIn, signUp, signOut]
+    () => ({ user, loading, signIn, joinWithToken, signOut }),
+    [user, loading, signIn, joinWithToken, signOut]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

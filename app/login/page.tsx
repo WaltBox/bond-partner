@@ -14,10 +14,20 @@ export default function LoginPage() {
   const [password, setPassword] = React.useState("");
   const [error, setError] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState(false);
+  const [existed, setExisted] = React.useState(false);
 
   React.useEffect(() => {
     if (user) router.replace("/dashboard");
   }, [user, router]);
+
+  // Came from /join with an account that already exists → prefill + nudge to sign in.
+  React.useEffect(() => {
+    const prefill = new URLSearchParams(window.location.search).get("email");
+    if (prefill) {
+      setEmail(prefill);
+      setExisted(true);
+    }
+  }, []);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -34,6 +44,11 @@ export default function LoginPage() {
 
   return (
     <AuthShell title="welcome back" subtitle="Sign in to your Bond partner portal">
+      {existed ? (
+        <div className="mb-4 rounded-xl border-[2.5px] border-[#1a1a1a] bg-[#FFF5E8] p-3 text-xs text-[#1a1a1a]" style={{ fontWeight: 500 }}>
+          You already have a Bond account — sign in to finish joining.
+        </div>
+      ) : null}
       <form onSubmit={onSubmit} className="space-y-4">
         <BrandField
           id="email"

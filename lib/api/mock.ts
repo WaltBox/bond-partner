@@ -267,9 +267,17 @@ export async function getMe(): Promise<MeResponse> {
   };
 }
 
-export async function joinPartner(token: string): Promise<{ partner_id: string; role: string }> {
+export async function partnerJoin(body: {
+  token: string;
+  email: string;
+  password: string;
+  username?: string;
+}) {
   await sleep(120);
-  return { partner_id: "demo-partner-uuid", role: "owner" };
+  return {
+    user: { id: "mock", email: body.email, role: "owner", username: body.username },
+    session: { access_token: "mock-access", refresh_token: "mock-refresh" },
+  };
 }
 
 export async function getOnboarding(): Promise<Onboarding> {

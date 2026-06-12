@@ -47,15 +47,6 @@ export async function authLogin(
   return data;
 }
 
-export function authSignup(body: {
-  email: string;
-  password: string;
-  username?: string;
-  phone?: string;
-}): Promise<unknown> {
-  return bondFetch(`/auth/signup`, { method: "POST", body: JSON.stringify(body) });
-}
-
 export function authMe(): Promise<AuthUser> {
   // /auth/me returns { user, ... } (consumer "me"); accept either shape.
   return bondFetch<{ user?: AuthUser } & AuthUser>(`/auth/me`).then((r) => (r.user ?? r) as AuthUser);
@@ -77,9 +68,25 @@ export function getMe(): Promise<MeResponse> {
   return bondFetch<MeResponse>(`/partner/me`);
 }
 
-export function joinPartner(token: string): Promise<{ partner_id: string; role: string }> {
-  if (USE_MOCK) return mock.joinPartner(token);
-  return bondFetch(`/partner/join`, { method: "POST", body: JSON.stringify({ token }) });
+/**
+ * Partner join: one call creates the account, binds it to the company behind the
+ * invite token, and logs in (returns a session). This is the PARTNER endpoint —
+ * not the consumer /auth/signup. Throws ApiError(409) if the account already
+ * exists (caller should route to login instead).
+ */
+export async function partnerJoin(body: {
+  token: string;
+  email: string;
+  password: string;
+  username?: string;
+}): Promise<{ user: AuthUser; session: AuthSession }> {
+  if (USE_MOCK) return mock.partnerJoin(body);
+  const data = await bondFetch<{ user: AuthUser; session: AuthSession }>(`/partner/join`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+  saveSession(data.session);
+  return data;
 }
 
 export function getOnboarding(): Promise<Onboarding> {
