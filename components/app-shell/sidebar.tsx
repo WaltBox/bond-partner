@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { LayoutDashboard, Receipt, FileText, Settings, HelpCircle, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BondLogo } from "./logo";
+import { ConfirmSignOut } from "./sign-out-button";
 import { usePartner } from "@/components/partner-context";
 import { useAuth } from "@/components/auth-context";
 import { PartnerAvatar } from "@/components/partner-avatar";
@@ -23,9 +24,8 @@ function isActive(pathname: string, href: string) {
 
 export function Sidebar() {
   const pathname = usePathname();
-  const router = useRouter();
   const { partner } = usePartner();
-  const { user, signOut } = useAuth();
+  const { user } = useAuth();
 
   return (
     <aside className="hidden w-64 shrink-0 flex-col border-r border-border bg-card lg:flex lg:sticky lg:top-0 lg:h-screen">
@@ -62,7 +62,7 @@ export function Sidebar() {
       </nav>
 
       {/* Account */}
-      <div className="border-t border-border p-3">
+      <div className="space-y-2 border-t border-border p-3">
         <div className="flex items-center gap-2.5 rounded-lg px-1.5 py-1">
           <PartnerAvatar name={partner?.name} logoUrl={partner?.logoUrl} className="size-9 rounded-lg text-sm" />
           <div className="min-w-0 flex-1 leading-tight">
@@ -71,16 +71,16 @@ export function Sidebar() {
               {(user?.username as string) || user?.email || partner?.category || "Partner"}
             </p>
           </div>
+        </div>
+        <ConfirmSignOut>
           <button
             type="button"
-            onClick={() => signOut().then(() => router.replace("/login"))}
-            aria-label="Sign out"
-            title="Sign out"
-            className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+            className="flex w-full items-center justify-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:border-destructive/30 hover:bg-destructive/5 hover:text-destructive"
           >
             <LogOut className="size-[18px]" />
+            Log out
           </button>
-        </div>
+        </ConfirmSignOut>
       </div>
     </aside>
   );
