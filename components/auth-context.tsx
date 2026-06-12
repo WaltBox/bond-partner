@@ -20,6 +20,7 @@ type AuthState = {
     token: string;
     email: string;
     password: string;
+    phone: string;
     username?: string;
   }) => Promise<void>;
   signOut: () => Promise<void>;
@@ -58,13 +59,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(u);
   }, []);
 
-  const joinWithToken = React.useCallback<AuthState["joinWithToken"]>(async ({ token, email, password, username }) => {
+  const joinWithToken = React.useCallback<AuthState["joinWithToken"]>(async ({ token, email, password, phone, username }) => {
     if (USE_MOCK) {
       setUser(FAKE_USER);
       return;
     }
     // One partner call: creates the account, joins the company, returns a session.
-    const { user: u } = await partnerJoin({ token, email, password, username });
+    const { user: u } = await partnerJoin({ token, email, password, phone, username });
     setUser(u);
   }, []);
 

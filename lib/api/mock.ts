@@ -271,6 +271,7 @@ export async function partnerJoin(body: {
   token: string;
   email: string;
   password: string;
+  phone: string;
   username?: string;
 }) {
   await sleep(120);

@@ -14,7 +14,7 @@ function JoinInner() {
   const token = params.get("token");
   const { user, joinWithToken } = useAuth();
 
-  const [form, setForm] = React.useState({ name: "", email: "", password: "" });
+  const [form, setForm] = React.useState({ name: "", email: "", phone: "", password: "" });
   const [error, setError] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState(false);
 
@@ -36,6 +36,7 @@ function JoinInner() {
         token,
         email: form.email.trim(),
         password: form.password,
+        phone: form.phone.trim(),
         username: form.name.trim() || undefined,
       });
       // user is set → the effect routes to the portal.
@@ -71,6 +72,7 @@ function JoinInner() {
       <form onSubmit={onSubmit} className="space-y-4">
         <BrandField id="name" label="Your name" value={form.name} onChange={set("name")} />
         <BrandField id="email" label="Email" type="email" value={form.email} onChange={set("email")} />
+        <BrandField id="phone" label="Phone" type="tel" value={form.phone} onChange={set("phone")} />
         <BrandField id="password" label="Password" type="password" value={form.password} onChange={set("password")} />
         {error ? <p className="text-sm font-semibold text-[#FF4D6D]">{error}</p> : null}
         <StickerButton type="submit" full disabled={busy || !token}>

@@ -78,6 +78,7 @@ export async function partnerJoin(body: {
   token: string;
   email: string;
   password: string;
+  phone: string;
   username?: string;
 }): Promise<{ user: AuthUser; session: AuthSession }> {
   if (USE_MOCK) return mock.partnerJoin(body);
