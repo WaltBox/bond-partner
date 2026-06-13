@@ -17,7 +17,7 @@ import { StatusBadge } from "@/components/status-badge";
 import { SourceTag } from "@/components/source-tag";
 import { MoneyStats } from "@/components/money-stats";
 import { DisputeDialog } from "@/components/tickets/dispute-dialog";
-import { getTicket } from "@/lib/api";
+import { getTicket, type TicketReceipt } from "@/lib/api";
 import { useAsync } from "@/lib/api/use-async";
 import { formatCents, formatCentsOrDash, formatDateTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -59,6 +59,8 @@ export function TicketDetailPanel({ redemptionId }: { redemptionId: string }) {
   const qualifyingCount = units.filter((u) => u.qualifies).length;
   const paidBackCount = units.filter((u) => u.paidBack).length;
 
+  const isSeparateChecks = d.settlementMode === "separate_checks" && !!d.receipts?.length;
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -94,7 +96,27 @@ export function TicketDetailPanel({ redemptionId }: { redemptionId: string }) {
 
       <Separator />
 
-      {/* Receipt + ledger */}
+      {isSeparateChecks ? (
+        /* Separate checks — one card per person's receipt */
+        <div>
+          <div className="mb-3 flex items-center gap-2">
+            <ScanLine className="size-4 text-primary" />
+            <p className="text-sm font-medium text-foreground">
+              Separate checks · {d.receipts!.length} receipts
+            </p>
+          </div>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            {d.receipts!.map((r, i) => (
+              <CheckCard key={r.receiptId} receipt={r} index={i} />
+            ))}
+          </div>
+          <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+            Each diner uploaded their own check — the totals and paybacks aggregate into the figures
+            above.
+          </p>
+        </div>
+      ) : (
+      /* Single payer — one receipt + combined ledger */
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[200px_1fr]">
         <div>
           <p className="mb-2 text-sm font-medium text-foreground">Scanned receipt</p>
@@ -206,6 +228,7 @@ export function TicketDetailPanel({ redemptionId }: { redemptionId: string }) {
           </p>
         </div>
       </div>
+      )}
 
       <Separator />
 
@@ -214,6 +237,74 @@ export function TicketDetailPanel({ redemptionId }: { redemptionId: string }) {
           Something look off? Open a dispute and Bond will review it.
         </p>
         <DisputeDialog ticketId={d.redemptionId} />
+      </div>
+    </div>
+  );
+}
+
+/** One person's check in a separate-checks redemption. */
+function CheckCard({ receipt, index }: { receipt: TicketReceipt; index: number }) {
+  const units = receipt.lineItems.flatMap((li, idx) =>
+    Array.from({ length: Math.max(1, li.qty) }, (_, i) => ({
+      key: `${idx}-${i}`,
+      name: li.name,
+      amountCents: li.unitCents,
+      paidBack: li.paidBack && i < li.paidBackQty,
+    }))
+  );
+  const paidBack = units.filter((u) => u.paidBack).length;
+
+  return (
+    <div className="overflow-hidden rounded-lg border border-border/70">
+      <div className="flex items-center justify-between gap-2 border-b border-border/70 bg-secondary/30 px-3 py-2">
+        <p className="text-sm font-medium text-foreground">Check {index + 1}</p>
+        <span className="tabular text-sm font-semibold text-foreground">
+          {formatCentsOrDash(receipt.totalCents)}
+        </span>
+      </div>
+      <div className="flex gap-3 p-3">
+        {receipt.imageUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <a href={receipt.imageUrl} target="_blank" rel="noreferrer" className="shrink-0">
+            <img
+              src={receipt.imageUrl}
+              alt={`Check ${index + 1} receipt`}
+              className="aspect-[3/4] w-20 rounded-md border border-border object-cover transition-opacity hover:opacity-90"
+            />
+          </a>
+        ) : (
+          <div className="flex aspect-[3/4] w-20 shrink-0 items-center justify-center rounded-md border border-dashed border-border bg-secondary/40 text-muted-foreground">
+            <ImageIcon className="size-5" />
+          </div>
+        )}
+        <div className="min-w-0 flex-1">
+          {units.length ? (
+            <ul className="space-y-1">
+              {units.map((u) => (
+                <li key={u.key} className="flex items-center justify-between gap-2 text-sm">
+                  <span className="flex min-w-0 items-center gap-2">
+                    <span className="truncate text-foreground">{u.name}</span>
+                    {u.paidBack ? (
+                      <Badge variant="default" className="font-normal">
+                        Paid back
+                      </Badge>
+                    ) : null}
+                  </span>
+                  <span className="tabular shrink-0 text-muted-foreground">
+                    {formatCentsOrDash(u.amountCents)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-muted-foreground">No items parsed for this check.</p>
+          )}
+          {paidBack > 0 ? (
+            <p className="mt-2 text-xs text-muted-foreground">
+              {paidBack} {paidBack === 1 ? "item" : "items"} paid back on this check.
+            </p>
+          ) : null}
+        </div>
       </div>
     </div>
   );

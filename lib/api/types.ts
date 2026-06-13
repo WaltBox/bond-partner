@@ -61,6 +61,17 @@ export interface LineItem {
   paidBackQty: number;
 }
 
+export type SettlementMode = "single_payer" | "separate_checks";
+
+// One per-person check, populated only when settlementMode === "separate_checks".
+export interface TicketReceipt {
+  receiptId: string;
+  uploadedBy: string; // opaque user id; not surfaced (portal is counts-only)
+  imageUrl: string | null; // signed URL — render directly
+  totalCents: number | null;
+  lineItems: LineItem[];
+}
+
 // GET /api/partner/:id/tickets/:redemptionId -> data.ticket
 export interface TicketDetail extends TicketListItem {
   party: { total: number };
@@ -69,7 +80,10 @@ export interface TicketDetail extends TicketListItem {
   receiptTotalCents: number | null;
   taxCents: number | null;
   tipCents: number | null;
-  lineItems: LineItem[];
+  lineItems: LineItem[]; // combined ledger (aggregated across receipts when separate checks)
+  // Multi-receipt (separate checks). Absent/`single_payer` → the single-receipt view above.
+  settlementMode?: SettlementMode;
+  receipts?: TicketReceipt[];
 }
 
 export interface Offer {
