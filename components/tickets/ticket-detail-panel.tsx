@@ -1,6 +1,15 @@
 "use client";
 
-import { Calendar, Users, ImageIcon, ScanLine, AlertCircle } from "lucide-react";
+import * as React from "react";
+import {
+  Calendar,
+  Users,
+  ImageIcon,
+  ScanLine,
+  AlertCircle,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -17,7 +26,7 @@ import { StatusBadge } from "@/components/status-badge";
 import { SourceTag } from "@/components/source-tag";
 import { MoneyStats } from "@/components/money-stats";
 import { DisputeDialog } from "@/components/tickets/dispute-dialog";
-import { getTicket, type TicketReceipt } from "@/lib/api";
+import { getTicket } from "@/lib/api";
 import { useAsync } from "@/lib/api/use-async";
 import { formatCents, formatCentsOrDash, formatDateTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -59,9 +68,12 @@ export function TicketDetailPanel({ redemptionId }: { redemptionId: string }) {
   const qualifyingCount = units.filter((u) => u.qualifies).length;
   const paidBackCount = units.filter((u) => u.paidBack).length;
 
-  // The partner endpoint doesn't send settlementMode — a populated receipts[] is
-  // the signal for separate checks (single-payer tickets return an empty array).
-  const isSeparateChecks = !!d.receipts && d.receipts.length > 0;
+  // Receipt images for the carousel: the per-person receipts when present
+  // (separate checks), otherwise the single combined receipt.
+  const receiptViews =
+    d.receipts && d.receipts.length > 0
+      ? d.receipts.map((r) => ({ imageUrl: r.imageUrl, totalCents: r.totalCents }))
+      : [{ imageUrl: d.receiptImageUrl ?? null, totalCents: d.receiptTotalCents }];
 
   return (
     <div className="space-y-6">
@@ -98,56 +110,13 @@ export function TicketDetailPanel({ redemptionId }: { redemptionId: string }) {
 
       <Separator />
 
-      {isSeparateChecks ? (
-        /* Separate checks — one card per person's receipt */
-        <div>
-          <div className="mb-3 flex items-center gap-2">
-            <ScanLine className="size-4 text-primary" />
-            <p className="text-sm font-medium text-foreground">
-              Separate checks · {d.receipts!.length} receipts
-            </p>
-          </div>
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-            {d.receipts!.map((r, i) => (
-              <CheckCard key={r.receiptId} receipt={r} index={i} />
-            ))}
-          </div>
-          <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-            Each diner uploaded their own check — the totals and paybacks aggregate into the figures
-            above.
-          </p>
-        </div>
-      ) : (
-      /* Single payer — one receipt + combined ledger */
+      {/* Receipt(s) + combined ledger */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[200px_1fr]">
-        <div>
-          <p className="mb-2 text-sm font-medium text-foreground">Scanned receipt</p>
-          {d.receiptImageUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <a href={d.receiptImageUrl} target="_blank" rel="noreferrer" className="block">
-              <img
-                src={d.receiptImageUrl}
-                alt={`Scanned receipt for ${d.redemptionId}`}
-                className="aspect-[3/4] w-full rounded-lg border border-border object-cover transition-opacity hover:opacity-90"
-              />
-            </a>
-          ) : (
-            <div className="flex aspect-[3/4] flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border bg-secondary/40 px-3 text-center text-muted-foreground">
-              <ImageIcon className="size-7" />
-              <span className="text-xs font-medium">
-                {d.receiptImageAvailable ? "Receipt on file" : "No receipt scanned"}
-              </span>
-              {d.receiptImageAvailable ? (
-                <span className="text-[11px] leading-snug text-muted-foreground/80">
-                  Image not exposed by the API yet
-                </span>
-              ) : null}
-            </div>
-          )}
-          <p className="mt-2 text-xs text-muted-foreground tabular">
-            Printed total {formatCentsOrDash(d.receiptTotalCents)}
-          </p>
-        </div>
+        <ReceiptColumn
+          views={receiptViews}
+          available={d.receiptImageAvailable}
+          alt={d.redemptionId}
+        />
 
         <div>
           <div className="mb-2 flex items-center gap-2">
@@ -230,7 +199,6 @@ export function TicketDetailPanel({ redemptionId }: { redemptionId: string }) {
           </p>
         </div>
       </div>
-      )}
 
       <Separator />
 
@@ -244,70 +212,76 @@ export function TicketDetailPanel({ redemptionId }: { redemptionId: string }) {
   );
 }
 
-/** One person's check in a separate-checks redemption. */
-function CheckCard({ receipt, index }: { receipt: TicketReceipt; index: number }) {
-  const units = receipt.lineItems.flatMap((li, idx) =>
-    Array.from({ length: Math.max(1, li.qty) }, (_, i) => ({
-      key: `${idx}-${i}`,
-      name: li.name,
-      amountCents: li.unitCents,
-      paidBack: li.paidBack && i < li.paidBackQty,
-    }))
-  );
-  const paidBack = units.filter((u) => u.paidBack).length;
+/** Scanned-receipt panel. One image for single payer; a carousel when a
+ *  separate-checks redemption has multiple receipts. Layout is unchanged. */
+function ReceiptColumn({
+  views,
+  available,
+  alt,
+}: {
+  views: { imageUrl: string | null; totalCents: number | null }[];
+  available: boolean;
+  alt: string;
+}) {
+  const [i, setI] = React.useState(0);
+  const n = views.length;
+  const idx = Math.min(i, n - 1);
+  const cur = views[idx];
+  const go = (delta: number) => setI((p) => (((p + delta) % n) + n) % n);
 
   return (
-    <div className="overflow-hidden rounded-lg border border-border/70">
-      <div className="flex items-center justify-between gap-2 border-b border-border/70 bg-secondary/30 px-3 py-2">
-        <p className="text-sm font-medium text-foreground">Check {index + 1}</p>
-        <span className="tabular text-sm font-semibold text-foreground">
-          {formatCentsOrDash(receipt.totalCents)}
-        </span>
-      </div>
-      <div className="flex gap-3 p-3">
-        {receipt.imageUrl ? (
+    <div>
+      <p className="mb-2 text-sm font-medium text-foreground">Scanned receipt</p>
+      <div className="relative">
+        {cur.imageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <a href={receipt.imageUrl} target="_blank" rel="noreferrer" className="shrink-0">
+          <a href={cur.imageUrl} target="_blank" rel="noreferrer" className="block">
             <img
-              src={receipt.imageUrl}
-              alt={`Check ${index + 1} receipt`}
-              className="aspect-[3/4] w-20 rounded-md border border-border object-cover transition-opacity hover:opacity-90"
+              src={cur.imageUrl}
+              alt={`Scanned receipt ${idx + 1} for ${alt}`}
+              className="aspect-[3/4] w-full rounded-lg border border-border object-cover transition-opacity hover:opacity-90"
             />
           </a>
         ) : (
-          <div className="flex aspect-[3/4] w-20 shrink-0 items-center justify-center rounded-md border border-dashed border-border bg-secondary/40 text-muted-foreground">
-            <ImageIcon className="size-5" />
+          <div className="flex aspect-[3/4] flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border bg-secondary/40 px-3 text-center text-muted-foreground">
+            <ImageIcon className="size-7" />
+            <span className="text-xs font-medium">
+              {available ? "Receipt on file" : "No receipt scanned"}
+            </span>
+            {available ? (
+              <span className="text-[11px] leading-snug text-muted-foreground/80">
+                Image not exposed by the API yet
+              </span>
+            ) : null}
           </div>
         )}
-        <div className="min-w-0 flex-1">
-          {units.length ? (
-            <ul className="space-y-1">
-              {units.map((u) => (
-                <li key={u.key} className="flex items-center justify-between gap-2 text-sm">
-                  <span className="flex min-w-0 items-center gap-2">
-                    <span className="truncate text-foreground">{u.name}</span>
-                    {u.paidBack ? (
-                      <Badge variant="default" className="font-normal">
-                        Paid back
-                      </Badge>
-                    ) : null}
-                  </span>
-                  <span className="tabular shrink-0 text-muted-foreground">
-                    {formatCentsOrDash(u.amountCents)}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="text-sm text-muted-foreground">No items parsed for this check.</p>
-          )}
-          {paidBack > 0 ? (
-            <p className="mt-2 text-xs text-muted-foreground">
-              {paidBack} {paidBack === 1 ? "item" : "items"} paid back on this check.
-            </p>
-          ) : null}
-        </div>
+        {n > 1 ? (
+          <>
+            <button
+              type="button"
+              onClick={() => go(-1)}
+              aria-label="Previous receipt"
+              className="absolute left-1.5 top-1/2 flex size-7 -translate-y-1/2 items-center justify-center rounded-full border border-border bg-background/90 text-foreground shadow-sm transition-colors hover:bg-secondary"
+            >
+              <ChevronLeft className="size-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => go(1)}
+              aria-label="Next receipt"
+              className="absolute right-1.5 top-1/2 flex size-7 -translate-y-1/2 items-center justify-center rounded-full border border-border bg-background/90 text-foreground shadow-sm transition-colors hover:bg-secondary"
+            >
+              <ChevronRight className="size-4" />
+            </button>
+            <div className="absolute bottom-1.5 left-1/2 -translate-x-1/2 rounded-full bg-foreground/70 px-2 py-0.5 text-[11px] font-medium text-background tabular">
+              {idx + 1} / {n}
+            </div>
+          </>
+        ) : null}
       </div>
+      <p className="mt-2 text-xs text-muted-foreground tabular">
+        Printed total {formatCentsOrDash(cur.totalCents)}
+      </p>
     </div>
   );
 }
