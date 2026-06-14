@@ -59,7 +59,9 @@ export function TicketDetailPanel({ redemptionId }: { redemptionId: string }) {
   const qualifyingCount = units.filter((u) => u.qualifies).length;
   const paidBackCount = units.filter((u) => u.paidBack).length;
 
-  const isSeparateChecks = d.settlementMode === "separate_checks" && !!d.receipts?.length;
+  // The partner endpoint doesn't send settlementMode — a populated receipts[] is
+  // the signal for separate checks (single-payer tickets return an empty array).
+  const isSeparateChecks = !!d.receipts && d.receipts.length > 0;
 
   return (
     <div className="space-y-6">
