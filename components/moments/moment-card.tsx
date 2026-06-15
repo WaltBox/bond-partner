@@ -1,77 +1,59 @@
 "use client";
 
-import * as React from "react";
-import { Heart, ChevronLeft, ChevronRight } from "lucide-react";
-import { Card } from "@/components/ui/card";
+import { Heart, Images, Download } from "lucide-react";
 import { formatDate } from "@/lib/format";
+import { imageThumb } from "@/lib/image";
 import type { Moment } from "@/lib/api";
 
-/** A single diner moment: 1–3 photos (carousel), caption, likes, date.
- *  Anonymized — no poster identity is shown. */
-export function MomentCard({ moment }: { moment: Moment }) {
+/** A diner moment as a fixed-aspect photo tile (every card is the SAME size).
+ *  Click to open the lightbox and export. Anonymized — no poster identity. */
+export function MomentCard({ moment, onOpen }: { moment: Moment; onOpen: () => void }) {
   const photos = [...moment.photos].sort((a, b) => a.order - b.order);
-  const [i, setI] = React.useState(0);
-  const n = photos.length;
-  const idx = Math.min(i, Math.max(0, n - 1));
-  const go = (delta: number) => setI((p) => (((p + delta) % n) + n) % n);
+  const cover = photos[0];
 
   return (
-    <Card className="overflow-hidden">
-      <div className="relative aspect-[4/5] bg-secondary">
-        {n > 0 ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={photos[idx].url}
-            alt={moment.caption ?? "Diner moment"}
-            loading="lazy"
-            className="size-full object-cover"
-          />
-        ) : null}
+    <button
+      type="button"
+      onClick={onOpen}
+      title={moment.caption ?? "View moment"}
+      className="group relative aspect-[4/5] overflow-hidden rounded-2xl bg-secondary text-left ring-1 ring-border/70 transition-shadow hover:ring-2 hover:ring-[#FF85B8]/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+    >
+      {cover ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={imageThumb(cover.url, { width: 640, height: 800 })}
+          alt={moment.caption ?? "Diner moment"}
+          loading="lazy"
+          decoding="async"
+          className="size-full object-cover transition-transform duration-300 group-hover:scale-[1.05]"
+        />
+      ) : null}
 
-        {n > 1 ? (
-          <>
-            <button
-              type="button"
-              onClick={() => go(-1)}
-              aria-label="Previous photo"
-              className="absolute left-2 top-1/2 flex size-7 -translate-y-1/2 items-center justify-center rounded-full bg-foreground/45 text-background backdrop-blur-sm transition-colors hover:bg-foreground/65"
-            >
-              <ChevronLeft className="size-4" />
-            </button>
-            <button
-              type="button"
-              onClick={() => go(1)}
-              aria-label="Next photo"
-              className="absolute right-2 top-1/2 flex size-7 -translate-y-1/2 items-center justify-center rounded-full bg-foreground/45 text-background backdrop-blur-sm transition-colors hover:bg-foreground/65"
-            >
-              <ChevronRight className="size-4" />
-            </button>
-            <div className="absolute bottom-2 left-1/2 flex -translate-x-1/2 gap-1.5">
-              {photos.map((p, k) => (
-                <span
-                  key={p.id}
-                  className={`size-1.5 rounded-full transition-colors ${
-                    k === idx ? "bg-white" : "bg-white/50"
-                  }`}
-                />
-              ))}
-            </div>
-          </>
-        ) : null}
-      </div>
+      {/* multi-photo indicator */}
+      {photos.length > 1 ? (
+        <span className="absolute right-2.5 top-2.5 flex items-center gap-1 rounded-full bg-black/45 px-2 py-0.5 text-[11px] font-semibold text-white backdrop-blur-sm">
+          <Images className="size-3" />
+          {photos.length}
+        </span>
+      ) : null}
 
-      <div className="space-y-2 p-3.5">
-        <div className="flex items-center gap-1.5 text-sm font-medium text-foreground">
-          <Heart className="size-4 fill-[#FF4D6D] text-[#FF4D6D]" />
-          <span className="tabular">{moment.likeCount}</span>
-          <span className="ml-auto text-xs font-normal text-muted-foreground">
-            {formatDate(moment.createdAt)}
-          </span>
-        </div>
+      {/* export affordance on hover */}
+      <span className="absolute left-2.5 top-2.5 flex items-center gap-1 rounded-full bg-white/90 px-2 py-1 text-[11px] font-semibold text-foreground opacity-0 shadow-sm transition-opacity group-hover:opacity-100">
+        <Download className="size-3" />
+        Export
+      </span>
+
+      {/* caption + meta overlay — fixed to the bottom, so card height never changes */}
+      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/35 to-transparent p-3 pt-10 text-white">
         {moment.caption ? (
-          <p className="text-sm leading-relaxed text-foreground">{moment.caption}</p>
+          <p className="line-clamp-2 text-sm font-medium leading-snug drop-shadow">{moment.caption}</p>
         ) : null}
+        <div className="mt-1.5 flex items-center gap-1.5 text-xs font-semibold">
+          <Heart className="size-3.5 fill-[#FF6B95] text-[#FF6B95]" />
+          <span className="tabular">{moment.likeCount}</span>
+          <span className="ml-auto font-normal text-white/80">{formatDate(moment.createdAt)}</span>
+        </div>
       </div>
-    </Card>
+    </button>
   );
 }

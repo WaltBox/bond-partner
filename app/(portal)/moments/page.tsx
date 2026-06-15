@@ -5,6 +5,8 @@ import { Images, Loader2, AlertCircle } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { MomentCard } from "@/components/moments/moment-card";
+import { MomentLightbox } from "@/components/moments/moment-lightbox";
+import { usePartner } from "@/components/partner-context";
 import { getMoments, type Moment } from "@/lib/api";
 
 const PAGE_SIZE = 24;
@@ -16,6 +18,8 @@ export default function MomentsPage() {
   const [loadingMore, setLoadingMore] = React.useState(false);
   const [done, setDone] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [selected, setSelected] = React.useState<Moment | null>(null);
+  const { partner } = usePartner();
   const sentinel = React.useRef<HTMLDivElement | null>(null);
   const busy = React.useRef(false);
 
@@ -60,16 +64,13 @@ export default function MomentsPage() {
     <div className="animate-fade-in">
       <PageHeader
         title="Moments"
-        description="Photos your diners shared at your spot — anonymized, just the vibe."
+        description="Photos your diners posted at your spot — tap any to download or grab a ready-to-post share card."
       />
 
       {loading ? (
-        <div className="columns-2 gap-4 sm:columns-3 lg:columns-4">
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
           {Array.from({ length: 8 }).map((_, i) => (
-            <div
-              key={i}
-              className="mb-4 aspect-[4/5] animate-pulse rounded-xl bg-secondary"
-            />
+            <div key={i} className="aspect-[4/5] animate-pulse rounded-2xl bg-secondary" />
           ))}
         </div>
       ) : error && moments.length === 0 ? (
@@ -92,11 +93,9 @@ export default function MomentsPage() {
         </div>
       ) : (
         <>
-          <div className="columns-2 gap-4 sm:columns-3 lg:columns-4">
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
             {moments.map((m) => (
-              <div key={m.id} className="mb-4 break-inside-avoid">
-                <MomentCard moment={m} />
-              </div>
+              <MomentCard key={m.id} moment={m} onOpen={() => setSelected(m)} />
             ))}
           </div>
 
@@ -113,6 +112,12 @@ export default function MomentsPage() {
           ) : null}
         </>
       )}
+
+      <MomentLightbox
+        moment={selected}
+        partnerName={partner?.name ?? null}
+        onClose={() => setSelected(null)}
+      />
     </div>
   );
 }

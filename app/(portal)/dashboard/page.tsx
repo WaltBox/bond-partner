@@ -7,6 +7,7 @@ import { OwedCostCard } from "@/components/dashboard/owed-cost-card";
 import { AiNote } from "@/components/dashboard/ai-note";
 import { SalesTrendCard } from "@/components/dashboard/sales-trend-card";
 import { PaybackFlow } from "@/components/dashboard/payback-flow";
+import { MomentsPreview } from "@/components/dashboard/moments-preview";
 import { ComingSoon } from "@/components/dashboard/coming-soon";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -90,6 +91,9 @@ export default function DashboardPage() {
             trueCostCents={tm.data.trueCostCents}
             roi={tm.data.roi}
           />
+
+          {/* What diners are posting */}
+          <MomentsPreview />
 
           {/* Sales over time — derived from tickets */}
           <SalesTrendCard />
