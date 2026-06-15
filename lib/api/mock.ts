@@ -94,7 +94,9 @@ export async function getDashboard(period: Period): Promise<DashboardData> {
   const trueCostCents = known
     ? Math.round(delivering.reduce((s, o) => s + o.paybacksThisMonth * (o.costToMakeCents ?? 0), 0) * factor)
     : null;
-  const keptCents = trueCostCents == null ? null : salesDrivenCents - owedToBondCents - trueCostCents;
+  // Kept = Sales − Paid Back. True Cost is the COGS *inside* the payback (an
+  // insight), not a third deduction — so don't subtract it again.
+  const keptCents = salesDrivenCents - owedToBondCents;
   const roi = owedToBondCents > 0 ? Math.round((salesDrivenCents / owedToBondCents) * 100) / 100 : null;
 
   const bySourceFor = (kind: SourceType) => {
@@ -148,8 +150,7 @@ const rawTickets: RawTicket[] = [
 function toListItem(r: RawTicket): TicketListItem {
   const costKnown = offerByKind(r.sourceType)?.costToMakeCents != null;
   const trueCostCents = r.hasReceipt && costKnown ? r.trueCostBaseCents : null;
-  const keptCents =
-    r.salesCents != null && trueCostCents != null ? r.salesCents - r.owedCents - trueCostCents : null;
+  const keptCents = r.salesCents != null ? r.salesCents - r.owedCents : null;
   return {
     redemptionId: r.redemptionId,
     sourceType: r.sourceType,

@@ -74,13 +74,12 @@ export default function DashboardPage() {
             <OwedCostCard owedCents={tm.data.owedToBondCents} realCostCents={tm.data.trueCostCents} />
             <FilterableMetricCard
               label="Made from Bond"
-              tooltip="What you keep after paybacks and cost."
+              tooltip="Sales minus what you paid back. This is before your own food cost, so it isn't pure profit."
               thisMonthCents={tm.data.keptCents}
               allTimeCents={at.data.keptCents}
               icon={Wallet}
               tone="emerald"
               highlight
-              nullPrompt={{ text: "Set cost-to-make", href: "/settings" }}
             />
           </div>
 
