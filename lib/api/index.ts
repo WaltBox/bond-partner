@@ -12,6 +12,7 @@ import type {
   AuthUser,
   DashboardData,
   MeResponse,
+  MomentsResponse,
   Offer,
   Onboarding,
   OnboardingStep,
@@ -141,6 +142,17 @@ export function getTicket(redemptionId: string): Promise<TicketDetail> {
   return bondFetch<{ ticket: TicketDetail }>(partnerPath(`/tickets/${redemptionId}`)).then(
     (d) => d.ticket
   );
+}
+
+export function getMoments(
+  params: { cursor?: string | null; limit?: number } = {}
+): Promise<MomentsResponse> {
+  if (USE_MOCK) return mock.getMoments(params);
+  const q = new URLSearchParams();
+  if (params.cursor) q.set("cursor", params.cursor);
+  if (params.limit != null) q.set("limit", String(params.limit));
+  const qs = q.toString();
+  return bondFetch<MomentsResponse>(partnerPath(`/moments${qs ? `?${qs}` : ""}`));
 }
 
 export function getSettings(): Promise<SettingsData> {

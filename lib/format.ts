@@ -62,3 +62,10 @@ export function formatDateTime(iso: string): string {
 export function formatCentsOrDash(cents: number | null): string {
   return cents == null ? "—" : formatCents(cents);
 }
+
+const dateFmt = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" });
+/** ISO -> "Jun 12, 2026" (date only). */
+export function formatDate(iso: string): string {
+  const d = new Date(iso);
+  return isNaN(d.getTime()) ? iso : dateFmt.format(d);
+}

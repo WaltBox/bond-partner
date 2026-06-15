@@ -115,6 +115,25 @@ export interface TicketFilters {
   offset?: number;
 }
 
+// GET /api/partner/:id/moments -> data { moments, next_cursor }
+// Diner photos taken at the restaurant. Anonymized — no crib/user identity.
+export interface MomentPhoto {
+  id: string;
+  url: string; // public URL — render directly
+  order: number; // 1–3
+}
+export interface Moment {
+  id: string;
+  caption: string | null;
+  likeCount: number;
+  createdAt: string; // ISO
+  photos: MomentPhoto[];
+}
+export interface MomentsResponse {
+  moments: Moment[];
+  next_cursor: string | null; // pass back as ?cursor= for the next page; null = end
+}
+
 // POST /api/auth/login -> data.user
 export interface AuthUser {
   id: string;

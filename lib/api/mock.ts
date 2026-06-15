@@ -10,6 +10,7 @@
 import type {
   DashboardData,
   MeResponse,
+  MomentsResponse,
   Offer,
   Onboarding,
   OnboardingStep,
@@ -216,6 +217,26 @@ export async function getTicket(redemptionId: string): Promise<TicketDetail> {
 }
 
 // ── Settings ─────────────────────────────────────────────────────────────────
+export async function getMoments(
+  _params: { cursor?: string | null; limit?: number } = {}
+): Promise<MomentsResponse> {
+  await sleep(140);
+  const img = (seed: string, n: number) =>
+    Array.from({ length: n }, (_, i) => ({
+      id: `${seed}-${i + 1}`,
+      url: `https://picsum.photos/seed/${seed}${i}/800/1000`,
+      order: i + 1,
+    }));
+  return {
+    moments: [
+      { id: "m1", caption: "taco tuesday with the crib 🌮", likeCount: 12, createdAt: "2026-06-13T18:40:00Z", photos: img("bond-a", 3) },
+      { id: "m2", caption: null, likeCount: 5, createdAt: "2026-06-12T20:10:00Z", photos: img("bond-b", 1) },
+      { id: "m3", caption: "best queso in dallas fr", likeCount: 28, createdAt: "2026-06-11T19:05:00Z", photos: img("bond-c", 2) },
+    ],
+    next_cursor: null,
+  };
+}
+
 export async function getSettings(): Promise<SettingsData> {
   await sleep(120);
   return {
