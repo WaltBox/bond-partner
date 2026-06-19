@@ -4,6 +4,7 @@ import "./globals.css";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/components/auth-context";
 import { PartnerProvider } from "@/components/partner-context";
+import PartnerChat from "@/components/partner-chat";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -36,7 +37,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         <AuthProvider>
           <PartnerProvider>
-            <TooltipProvider delayDuration={150}>{children}</TooltipProvider>
+            <TooltipProvider delayDuration={150}>
+              {children}
+              <PartnerChat />
+            </TooltipProvider>
           </PartnerProvider>
         </AuthProvider>
       </body>
