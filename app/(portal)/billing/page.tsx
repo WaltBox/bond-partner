@@ -73,10 +73,8 @@ interface BillingState {
   refill_target_cents:         number | null;
   prepaid_empty_action:        "pause" | "continue" | null;
   auto_pay_threshold_cents:    number | null;
-  card_last4:                  string | null;
-  card_brand:                  string | null;
-  card_exp_month:              number | null;
-  card_exp_year:               number | null;
+  has_payment_method:          boolean;
+  payment_method:              { brand: string; last4: string } | null;
 }
 
 interface LedgerEvent {
@@ -123,10 +121,8 @@ const EMPTY_BILLING: BillingState = {
   refill_target_cents:         null,
   prepaid_empty_action:        null,
   auto_pay_threshold_cents:    null,
-  card_last4:                  null,
-  card_brand:                  null,
-  card_exp_month:              null,
-  card_exp_year:               null,
+  has_payment_method:          false,
+  payment_method:              null,
 };
 
 const TOPUP_PRESETS = [10000, 25000, 50000, 100000];
@@ -151,7 +147,12 @@ function settlementOf(method: CollectionMethod | null): PaygSettlement {
   return method === "auto_pay" ? "auto_pay" : "net_terms";
 }
 function hasCard(b: BillingState) {
-  return !!b.card_last4;
+  return b.has_payment_method;
+}
+
+function cardLabel(b: BillingState) {
+  if (!b.payment_method) return "Card on file";
+  return `${b.payment_method.brand.charAt(0).toUpperCase() + b.payment_method.brand.slice(1)} ···· ${b.payment_method.last4}`;
 }
 
 // ─── Toast ────────────────────────────────────────────────────────────────────
@@ -348,8 +349,7 @@ function CardSection({ billing, clientSecret, onSetupComplete }: {
     return (
       <div className="flex items-center gap-2.5 rounded-xl border border-border bg-secondary/30 px-4 py-3">
         <CreditCard className="size-4 text-muted-foreground" />
-        <span className="text-sm font-medium capitalize">{billing.card_brand} ···· {billing.card_last4}</span>
-        <span className="text-xs text-muted-foreground">{billing.card_exp_month}/{billing.card_exp_year}</span>
+        <span className="text-sm font-medium">{cardLabel(billing)}</span>
       </div>
     );
   }
@@ -496,7 +496,7 @@ function SwitchToPrepaidSheet({
           {fundAmount > 0 && hasCard(billing) && (
             <div className="rounded-xl border border-border/70 bg-secondary/20 p-3.5 space-y-2">
               <SummaryRow label="Loading"><span className="font-bold text-foreground">{formatCents(fundAmount)}</span></SummaryRow>
-              <SummaryRow label="Charged to"><span className="capitalize">{billing.card_brand} ···· {billing.card_last4}</span></SummaryRow>
+              <SummaryRow label="Charged to">{cardLabel(billing)}</SummaryRow>
               <SummaryRow label="When low">{autoReload ? "Auto-reloads" : "Sends alert"}</SummaryRow>
             </div>
           )}
@@ -708,7 +708,7 @@ function AddFundsSheet({
           {hasCard(billing) ? (
             <div className="flex items-center gap-2.5 rounded-xl border border-border bg-secondary/30 px-4 py-3">
               <CreditCard className="size-4 text-muted-foreground" />
-              <span className="text-sm font-medium capitalize">{billing.card_brand} ···· {billing.card_last4}</span>
+              <span className="text-sm font-medium">{cardLabel(billing)}</span>
             </div>
           ) : (
             <p className="text-xs text-muted-foreground">No card on file. Add a card from the billing settings.</p>
@@ -801,7 +801,7 @@ function PayTabSheet({
           {hasCard(billing) ? (
             <div className="flex items-center gap-2.5 rounded-xl border border-border bg-secondary/30 px-4 py-3">
               <CreditCard className="size-4 text-muted-foreground" />
-              <span className="text-sm font-medium capitalize">{billing.card_brand} ···· {billing.card_last4}</span>
+              <span className="text-sm font-medium">{cardLabel(billing)}</span>
             </div>
           ) : (
             <p className="text-xs text-muted-foreground">No card on file. Add a card first.</p>
@@ -882,7 +882,7 @@ function NetTermsBalanceCard({ billing, onPayNow }: { billing: BillingState; onP
       <DetailBlock>
         <DetailRow label="Invoice date">1st of each month</DetailRow>
         <DetailRow label="Payment due">30 days after invoice</DetailRow>
-        {billing.card_last4 && <DetailRow label="Card on file"><span className="capitalize">{billing.card_brand} ···· {billing.card_last4}</span></DetailRow>}
+        {hasCard(billing) && <DetailRow label="Card on file">{cardLabel(billing)}</DetailRow>}
       </DetailBlock>
       {owed > 0 && hasCard(billing) && (
         <Button variant="outline" size="sm" className="w-full gap-2 text-xs" onClick={onPayNow}>
@@ -917,9 +917,9 @@ function AutopayBalanceCard({ billing, onManage }: { billing: BillingState; onMa
           <span>Charges at {formatCents(threshold)}</span>
         </div>
       </div>
-      {billing.card_last4 && (
+      {hasCard(billing) && (
         <DetailBlock>
-          <DetailRow label="Card"><span className="capitalize">{billing.card_brand} ···· {billing.card_last4}</span></DetailRow>
+          <DetailRow label="Card">{cardLabel(billing)}</DetailRow>
           <DetailRow label="Threshold">{formatCents(threshold)}</DetailRow>
         </DetailBlock>
       )}
