@@ -80,56 +80,52 @@ interface BillingState {
 
 interface LedgerEvent {
   id:           string;
-  event_type:   "redemption" | "payment" | "adjustment";
+  date:         string;
+  type:         "redemption" | "payment" | "adjustment";
+  source:       string;
   amount_cents: number;
-  note:         string;
-  created_at:   string;
+  note:         string | null;
+}
+
+interface TransactionsResponse {
+  transactions: LedgerEvent[];
+  balance_cents: number;
+  has_more:      boolean;
+  next_cursor:   string | null;
 }
 
 interface Invoice {
   id:           string;
   period_start: string;
+  period_end:   string;
   amount_cents: number;
   due_at:       string;
   status:       "open" | "paid" | "overdue";
+  paid_at:      string | null;
+  created_at:   string;
 }
 
-// ─── Mock data (used only while API is unavailable) ──────────────────────────
+interface InvoicesResponse {
+  invoices: Invoice[];
+  summary:  { total: number; open: number; overdue: number; paid: number };
+}
 
-const MOCK_BILLING: BillingState = {
-  balance_cents:               -3240,
+// ─── Fallback billing state (shown while fetching) ────────────────────────────
+
+const EMPTY_BILLING: BillingState = {
+  balance_cents:               0,
   status:                      "active",
   paused_reason:               null,
   collection_method:           "net_terms",
-  low_balance_threshold_cents: 5000,
-  refill_target_cents:         50000,
-  prepaid_empty_action:        "pause",
-  auto_pay_threshold_cents:    25000,
+  low_balance_threshold_cents: null,
+  refill_target_cents:         null,
+  prepaid_empty_action:        null,
+  auto_pay_threshold_cents:    null,
   card_last4:                  null,
   card_brand:                  null,
   card_exp_month:              null,
   card_exp_year:               null,
 };
-
-const MOCK_LEDGER: LedgerEvent[] = [
-  { id: "e1",  event_type: "redemption", amount_cents: -2400,  note: "Member cashback — party of 4",  created_at: "2026-06-15T18:32:00Z" },
-  { id: "e2",  event_type: "redemption", amount_cents: -1200,  note: "Member cashback — party of 2",  created_at: "2026-06-14T13:10:00Z" },
-  { id: "e3",  event_type: "payment",    amount_cents: 50000,  note: "Card charge",                   created_at: "2026-06-01T09:00:00Z" },
-  { id: "e4",  event_type: "redemption", amount_cents: -1800,  note: "Member cashback — party of 3",  created_at: "2026-05-28T20:44:00Z" },
-  { id: "e5",  event_type: "redemption", amount_cents: -3200,  note: "Member cashback — party of 6",  created_at: "2026-05-22T19:15:00Z" },
-  { id: "e6",  event_type: "payment",    amount_cents: 50000,  note: "Card charge",                   created_at: "2026-05-01T09:00:00Z" },
-  { id: "e7",  event_type: "redemption", amount_cents: -900,   note: "Member cashback — party of 2",  created_at: "2026-04-30T17:55:00Z" },
-  { id: "e8",  event_type: "adjustment", amount_cents: 500,    note: "Goodwill credit from Bond",     created_at: "2026-04-15T11:00:00Z" },
-  { id: "e9",  event_type: "redemption", amount_cents: -2100,  note: "Member cashback — party of 4",  created_at: "2026-04-12T20:30:00Z" },
-  { id: "e10", event_type: "payment",    amount_cents: 50000,  note: "Card charge",                   created_at: "2026-04-01T09:00:00Z" },
-];
-
-const MOCK_INVOICES: Invoice[] = [
-  { id: "inv1", period_start: "2026-06-01", amount_cents: 3240,  due_at: "2026-07-01T00:00:00Z", status: "open"    },
-  { id: "inv2", period_start: "2026-05-01", amount_cents: 18600, due_at: "2026-06-01T00:00:00Z", status: "paid"    },
-  { id: "inv3", period_start: "2026-04-01", amount_cents: 9800,  due_at: "2026-05-01T00:00:00Z", status: "paid"    },
-  { id: "inv4", period_start: "2026-03-01", amount_cents: 22100, due_at: "2026-04-01T00:00:00Z", status: "overdue" },
-];
 
 const TOPUP_PRESETS = [10000, 25000, 50000, 100000];
 
@@ -920,7 +916,25 @@ function AutopayBalanceCard({ billing, onManage }: { billing: BillingState; onMa
 
 // ─── Invoice history ──────────────────────────────────────────────────────────
 
-function InvoiceHistory({ invoices }: { invoices: Invoice[] }) {
+function InvoiceHistory() {
+  const [invoices, setInvoices] = React.useState<Invoice[]>([]);
+  const [loading, setLoading]   = React.useState(true);
+
+  React.useEffect(() => {
+    bondFetch<InvoicesResponse>(partnerPath("/billing/invoices"))
+      .then(r => setInvoices(r.invoices))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) return (
+    <Card><CardContent className="flex items-center gap-2 p-6 text-muted-foreground text-sm"><Loader2 className="size-4 animate-spin" /> Loading invoices…</CardContent></Card>
+  );
+
+  if (!invoices.length) return (
+    <Card><CardContent className="p-6 text-sm text-muted-foreground">No invoices yet.</CardContent></Card>
+  );
+
   return (
     <Card>
       <CardHeader className="pb-3"><CardTitle className="text-base">Invoice history</CardTitle></CardHeader>
@@ -958,56 +972,88 @@ function InvoiceBadge({ status }: { status: Invoice["status"] }) {
 
 // ─── Ledger ───────────────────────────────────────────────────────────────────
 
-const PAGE_SIZE = 5;
+function Ledger() {
+  const [events, setEvents]   = React.useState<LedgerEvent[]>([]);
+  const [cursor, setCursor]   = React.useState<string | null>(null);
+  const [hasMore, setHasMore] = React.useState(false);
+  const [loading, setLoading] = React.useState(true);
+  const [loadingMore, setLoadingMore] = React.useState(false);
 
-function Ledger({ events }: { events: LedgerEvent[] }) {
-  const [page, setPage] = React.useState(1);
-  const visible = events.slice(0, page * PAGE_SIZE);
-  const hasMore = visible.length < events.length;
+  async function fetchPage(before?: string) {
+    const qs = before ? `?before=${encodeURIComponent(before)}&limit=20` : "?limit=20";
+    const r  = await bondFetch<TransactionsResponse>(partnerPath(`/billing/transactions${qs}`));
+    return r;
+  }
+
+  React.useEffect(() => {
+    fetchPage()
+      .then(r => { setEvents(r.transactions); setHasMore(r.has_more); setCursor(r.next_cursor); })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  async function loadMore() {
+    if (!cursor) return;
+    setLoadingMore(true);
+    try {
+      const r = await fetchPage(cursor);
+      setEvents(prev => [...prev, ...r.transactions]);
+      setHasMore(r.has_more);
+      setCursor(r.next_cursor);
+    } finally {
+      setLoadingMore(false);
+    }
+  }
+
+  if (loading) return (
+    <Card><CardContent className="flex items-center gap-2 p-6 text-muted-foreground text-sm"><Loader2 className="size-4 animate-spin" /> Loading transactions…</CardContent></Card>
+  );
+
   return (
     <Card>
       <CardHeader className="pb-3">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-base">Transactions</CardTitle>
-          <span className="text-xs text-muted-foreground">{events.length} total</span>
-        </div>
+        <CardTitle className="text-base">Transactions</CardTitle>
       </CardHeader>
       <CardContent className="p-0">
-        <Table>
-          <TableHeader>
-            <TableRow className="hover:bg-transparent">
-              <TableHead className="text-xs w-28">Date</TableHead>
-              <TableHead className="text-xs">Description</TableHead>
-              <TableHead className="text-right text-xs">Amount</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {visible.map(evt => {
-              const pos      = evt.amount_cents > 0;
-              const isAdjust = evt.event_type === "adjustment";
-              return (
-                <TableRow key={evt.id}>
-                  <TableCell className="whitespace-nowrap text-muted-foreground text-xs">{fmtDate(evt.created_at)}</TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <div className={`flex size-6 shrink-0 items-center justify-center rounded-full ${pos ? "bg-emerald-100" : isAdjust ? "bg-blue-100" : "bg-secondary"}`}>
-                        {pos ? <ArrowUpRight className="size-3 text-emerald-700" /> : isAdjust ? <Plus className="size-3 text-blue-700" /> : <ArrowDownLeft className="size-3 text-muted-foreground" />}
+        {events.length === 0 ? (
+          <p className="p-6 text-sm text-muted-foreground">No transactions yet.</p>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow className="hover:bg-transparent">
+                <TableHead className="text-xs w-28">Date</TableHead>
+                <TableHead className="text-xs">Description</TableHead>
+                <TableHead className="text-right text-xs">Amount</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {events.map(evt => {
+                const pos      = evt.amount_cents > 0;
+                const isAdjust = evt.type === "adjustment";
+                return (
+                  <TableRow key={evt.id}>
+                    <TableCell className="whitespace-nowrap text-muted-foreground text-xs">{fmtDate(evt.date)}</TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <div className={`flex size-6 shrink-0 items-center justify-center rounded-full ${pos ? "bg-emerald-100" : isAdjust ? "bg-blue-100" : "bg-secondary"}`}>
+                          {pos ? <ArrowUpRight className="size-3 text-emerald-700" /> : isAdjust ? <Plus className="size-3 text-blue-700" /> : <ArrowDownLeft className="size-3 text-muted-foreground" />}
+                        </div>
+                        <span className="text-sm">{evt.note ?? evt.source}</span>
                       </div>
-                      <span className="text-sm">{evt.note}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell className={`text-right text-sm font-semibold tabular-nums ${pos ? "text-emerald-700" : ""}`}>
-                    {pos ? "+" : ""}{formatCents(evt.amount_cents)}
-                  </TableCell>
-                </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
+                    </TableCell>
+                    <TableCell className={`text-right text-sm font-semibold tabular-nums ${pos ? "text-emerald-700" : ""}`}>
+                      {pos ? "+" : ""}{formatCents(evt.amount_cents)}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        )}
         {hasMore && (
           <div className="border-t border-border/40 px-4 py-3">
-            <Button variant="ghost" size="sm" onClick={() => setPage(p => p + 1)} className="w-full text-xs text-muted-foreground gap-1.5">
-              <ChevronDown className="size-3.5" /> Load more
+            <Button variant="ghost" size="sm" onClick={loadMore} disabled={loadingMore} className="w-full text-xs text-muted-foreground gap-1.5">
+              {loadingMore ? <><Loader2 className="size-3.5 animate-spin" /> Loading…</> : <><ChevronDown className="size-3.5" /> Load more</>}
             </Button>
           </div>
         )}
@@ -1060,9 +1106,7 @@ function SummaryRow({ label, children }: { label: string; children: React.ReactN
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function BillingPage() {
-  const [billing, setBilling]   = React.useState<BillingState>(MOCK_BILLING);
-  const [ledger]                = React.useState<LedgerEvent[]>(MOCK_LEDGER);
-  const [invoices]              = React.useState<Invoice[]>(MOCK_INVOICES);
+  const [billing, setBilling]   = React.useState<BillingState>(EMPTY_BILLING);
   const [loading, setLoading]   = React.useState(true);
 
   const [prepaidSheet, setPrepaidSheet] = React.useState(false);
@@ -1076,7 +1120,7 @@ export default function BillingPage() {
   React.useEffect(() => {
     bondFetch<BillingState>(partnerPath("/billing"))
       .then(data => setBilling(data))
-      .catch(() => {}) // falls through to MOCK_BILLING
+      .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
 
@@ -1166,8 +1210,8 @@ export default function BillingPage() {
         </Card>
 
         <div className="space-y-6 lg:col-span-3">
-          <Ledger events={ledger} />
-          {track === "payg" && settlement === "net_terms" && <InvoiceHistory invoices={invoices} />}
+          <Ledger />
+          {track === "payg" && settlement === "net_terms" && <InvoiceHistory />}
         </div>
       </div>
 
