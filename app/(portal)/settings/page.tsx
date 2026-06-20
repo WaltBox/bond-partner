@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Building2, Tag, Zap, Check, AlertCircle, Loader2 } from "lucide-react";
+import { Building2, Tag, Zap, Check, AlertCircle, Loader2, CreditCard, X } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,6 +16,7 @@ import { getSettings, patchOffer, type Offer } from "@/lib/api";
 import { useAsync } from "@/lib/api/use-async";
 import { formatCents } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { bondFetch, partnerPath } from "@/lib/api/client";
 
 function initials(s: string) {
   return (
@@ -106,6 +107,9 @@ export default function SettingsPage() {
             </CardContent>
           </Card>
 
+          {/* Payment methods */}
+          <PaymentMethodsCard />
+
           {/* Promotions */}
           <Card>
             <CardHeader>
@@ -134,6 +138,69 @@ export default function SettingsPage() {
         </div>
       )}
     </div>
+  );
+}
+
+function PaymentMethodsCard() {
+  const [brand, setBrand]       = React.useState<string | null>(null);
+  const [last4, setLast4]       = React.useState<string | null>(null);
+  const [removing, setRemoving] = React.useState(false);
+  const [loading, setLoading]   = React.useState(true);
+
+  React.useEffect(() => {
+    bondFetch<{ has_payment_method: boolean; payment_method: { brand: string; last4: string } | null }>(
+      partnerPath("/billing")
+    )
+      .then(r => {
+        setBrand(r.payment_method?.brand ?? null);
+        setLast4(r.payment_method?.last4 ?? null);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  async function remove() {
+    setRemoving(true);
+    try {
+      await bondFetch(partnerPath("/billing/payment-method"), { method: "DELETE" });
+      setBrand(null);
+      setLast4(null);
+    } catch {
+      // silent — card stays displayed
+    } finally {
+      setRemoving(false);
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Payment methods</CardTitle>
+        <CardDescription>Cards linked to your account for billing.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        {loading ? (
+          <Skeleton className="h-12 w-full rounded-xl" />
+        ) : last4 ? (
+          <div className="flex items-center justify-between rounded-xl border border-border bg-secondary/30 px-4 py-3">
+            <div className="flex items-center gap-2.5">
+              <CreditCard className="size-4 text-muted-foreground shrink-0" />
+              <span className="text-sm font-medium capitalize">{brand} ···· {last4}</span>
+            </div>
+            <button
+              onClick={remove}
+              disabled={removing}
+              aria-label="Remove card"
+              className="flex size-6 items-center justify-center rounded-full text-muted-foreground hover:bg-destructive/10 hover:text-destructive disabled:opacity-40 transition-colors"
+            >
+              {removing ? <Loader2 className="size-3.5 animate-spin" /> : <X className="size-3.5" />}
+            </button>
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">No card linked. Add one from the billing page.</p>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 

@@ -430,34 +430,12 @@ function ReplaceCardSheet({
 // ─── Card management section ──────────────────────────────────────────────────
 
 function CardManagementSection({
-  billing, onRefresh, onToast,
+  billing, onRefresh,
 }: {
   billing: BillingState;
   onRefresh: () => Promise<void>;
-  onToast: (msg: string, type?: "success" | "info" | "error") => void;
 }) {
   const [replaceSheet, setReplaceSheet] = React.useState(false);
-  const [removing, setRemoving]         = React.useState(false);
-
-  async function removeCard() {
-    setRemoving(true);
-    try {
-      const r = await bondFetch<{ removed: boolean; collection_method_changed: "net_terms" | null }>(
-        partnerPath("/billing/payment-method"),
-        { method: "DELETE" }
-      );
-      await onRefresh();
-      if (r.collection_method_changed) {
-        onToast("Card removed. Switched to monthly invoice since autopay requires a card.", "info");
-      } else {
-        onToast("Card removed.", "info");
-      }
-    } catch (e) {
-      onToast(e instanceof Error ? e.message : "Couldn't remove card.", "error");
-    } finally {
-      setRemoving(false);
-    }
-  }
 
   return (
     <>
@@ -469,21 +447,12 @@ function CardManagementSection({
               <CreditCard className="size-4 text-muted-foreground shrink-0" />
               <span className="text-sm font-medium">{cardLabel(billing)}</span>
             </div>
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => setReplaceSheet(true)}
-                className="text-xs font-medium text-primary hover:underline"
-              >
-                Replace
-              </button>
-              <button
-                onClick={removeCard}
-                disabled={removing}
-                className="text-xs font-medium text-muted-foreground hover:text-destructive disabled:opacity-50"
-              >
-                {removing ? "Removing…" : "Remove"}
-              </button>
-            </div>
+            <button
+              onClick={() => setReplaceSheet(true)}
+              className="text-xs font-medium text-primary hover:underline"
+            >
+              Replace
+            </button>
           </div>
         ) : (
           <div className="flex items-center justify-between gap-3 rounded-xl border border-dashed border-border px-4 py-3">
@@ -1361,7 +1330,6 @@ export default function BillingPage() {
       <CardManagementSection
         billing={billing}
         onRefresh={refreshBilling}
-        onToast={(msg, type) => setToast({ msg, type })}
       />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
