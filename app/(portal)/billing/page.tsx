@@ -372,6 +372,144 @@ function CardSection({ billing, clientSecret, onSetupComplete }: {
   );
 }
 
+// ─── Sheet: Replace card ─────────────────────────────────────────────────────
+
+function ReplaceCardSheet({
+  open, onClose, onSuccess,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const [clientSecret, setCs] = React.useState<string | null>(null);
+  const [err, setErr]         = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (!open) { setCs(null); setErr(null); return; }
+    bondFetch<{ client_secret: string }>(partnerPath("/billing/setup-intent"), { method: "POST" })
+      .then(r => setCs(r.client_secret))
+      .catch(() => setErr("Couldn't start card setup. Try again."));
+  }, [open]);
+
+  return (
+    <Sheet open={open} onOpenChange={v => !v && onClose()}>
+      <SheetContent side="right" className="w-full sm:max-w-md flex flex-col gap-0 p-0">
+        <SheetHeader className="px-6 pt-6 pb-4 border-b border-border/60">
+          <div className="flex items-center gap-3">
+            <div className="flex size-9 items-center justify-center rounded-xl border-[2px] border-[#1a1a1a] bg-[#FFC93C]">
+              <CreditCard className="size-4 text-[#1a1a1a]" />
+            </div>
+            <div>
+              <SheetTitle>Replace card</SheetTitle>
+              <SheetDescription className="text-xs">Your old card will be removed automatically.</SheetDescription>
+            </div>
+          </div>
+        </SheetHeader>
+        <div className="flex-1 px-6 py-5">
+          {err && <p className="text-sm text-red-600">{err}</p>}
+          {!err && !clientSecret && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="size-4 animate-spin" /> Loading…
+            </div>
+          )}
+          {clientSecret && (
+            <Elements stripe={stripePromise}>
+              <StripeCardForm
+                clientSecret={clientSecret}
+                onSuccess={() => { onSuccess(); onClose(); }}
+                onError={msg => setErr(msg)}
+              />
+            </Elements>
+          )}
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+// ─── Card management section ──────────────────────────────────────────────────
+
+function CardManagementSection({
+  billing, onRefresh, onToast,
+}: {
+  billing: BillingState;
+  onRefresh: () => Promise<void>;
+  onToast: (msg: string, type?: "success" | "info" | "error") => void;
+}) {
+  const [replaceSheet, setReplaceSheet] = React.useState(false);
+  const [removing, setRemoving]         = React.useState(false);
+
+  async function removeCard() {
+    setRemoving(true);
+    try {
+      const r = await bondFetch<{ removed: boolean; collection_method_changed: "net_terms" | null }>(
+        partnerPath("/billing/payment-method"),
+        { method: "DELETE" }
+      );
+      await onRefresh();
+      if (r.collection_method_changed) {
+        onToast("Card removed. Switched to monthly invoice since autopay requires a card.", "info");
+      } else {
+        onToast("Card removed.", "info");
+      }
+    } catch (e) {
+      onToast(e instanceof Error ? e.message : "Couldn't remove card.", "error");
+    } finally {
+      setRemoving(false);
+    }
+  }
+
+  return (
+    <>
+      <div className="space-y-2">
+        <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Payment method</p>
+        {hasCard(billing) ? (
+          <div className="flex items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3">
+            <div className="flex items-center gap-2.5">
+              <CreditCard className="size-4 text-muted-foreground shrink-0" />
+              <span className="text-sm font-medium">{cardLabel(billing)}</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setReplaceSheet(true)}
+                className="text-xs font-medium text-primary hover:underline"
+              >
+                Replace
+              </button>
+              <button
+                onClick={removeCard}
+                disabled={removing}
+                className="text-xs font-medium text-muted-foreground hover:text-destructive disabled:opacity-50"
+              >
+                {removing ? "Removing…" : "Remove"}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center justify-between gap-3 rounded-xl border border-dashed border-border px-4 py-3">
+            <div className="flex items-center gap-2.5">
+              <CreditCard className="size-4 text-muted-foreground/50 shrink-0" />
+              <span className="text-sm text-muted-foreground">No card on file</span>
+            </div>
+            <button
+              onClick={() => setReplaceSheet(true)}
+              className="text-xs font-medium text-primary hover:underline"
+            >
+              Add card
+            </button>
+          </div>
+        )}
+      </div>
+
+      <ReplaceCardSheet
+        open={replaceSheet}
+        onClose={() => setReplaceSheet(false)}
+        onSuccess={onRefresh}
+      />
+    </>
+  );
+}
+
 // ─── Sheet: Switch to Prepaid ─────────────────────────────────────────────────
 
 function SwitchToPrepaidSheet({
@@ -1143,11 +1281,15 @@ export default function BillingPage() {
   const track      = trackOf(billing.collection_method);
   const settlement = settlementOf(billing.collection_method);
 
+  async function refreshBilling() {
+    const fresh = await bondFetch<BillingState>(partnerPath("/billing"));
+    setBilling(fresh);
+  }
+
   // After card setup we refetch to pick up the new card details
   async function handleSetupComplete() {
     try {
-      const fresh = await bondFetch<BillingState>(partnerPath("/billing"));
-      setBilling(fresh);
+      await refreshBilling();
       setToast({ msg: "Card saved.", type: "info" });
     } catch {
       setToast({ msg: "Card saved — refresh to see updated details.", type: "info" });
@@ -1215,6 +1357,12 @@ export default function BillingPage() {
       />
 
       <HowYouPaySelector track={track} onTrackClick={handleTrackClick} />
+
+      <CardManagementSection
+        billing={billing}
+        onRefresh={refreshBilling}
+        onToast={(msg, type) => setToast({ msg, type })}
+      />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
         <Card className="lg:col-span-2">
