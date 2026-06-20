@@ -3,7 +3,6 @@
 import { DollarSign, Wallet, BarChart3, Users, Zap, Tag, AlertCircle } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { FilterableMetricCard } from "@/components/dashboard/filterable-metric-card";
-import { OwedCostCard } from "@/components/dashboard/owed-cost-card";
 import { AiNote } from "@/components/dashboard/ai-note";
 import { SalesTrendCard } from "@/components/dashboard/sales-trend-card";
 import { PaybackFlow } from "@/components/dashboard/payback-flow";
@@ -72,7 +71,6 @@ export default function DashboardPage() {
               icon={DollarSign}
               tone="primary"
             />
-            <OwedCostCard owedCents={tm.data.owedToBondCents} realCostCents={tm.data.trueCostCents} />
             <FilterableMetricCard
               label="Made from Bond"
               tooltip="Sales minus what you paid back. This is before your own food cost, so it isn't pure profit."

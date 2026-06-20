@@ -67,6 +67,7 @@ interface BillingState {
   balance_cents:               number;
   status:                      "active" | "paused" | "past_due";
   paused_reason:               "pot_empty" | "payment_failed" | "limit_hit" | null;
+  is_live:                     boolean;
   collection_method:           CollectionMethod | null;
   low_balance_threshold_cents: number | null;
   refill_target_cents:         number | null;
@@ -116,6 +117,7 @@ const EMPTY_BILLING: BillingState = {
   balance_cents:               0,
   status:                      "active",
   paused_reason:               null,
+  is_live:                     false,
   collection_method:           "net_terms",
   low_balance_threshold_cents: null,
   refill_target_cents:         null,
@@ -172,17 +174,31 @@ function Toast({ message, type = "success", onDone }: { message: string; type?: 
 // ─── Status banner ────────────────────────────────────────────────────────────
 
 function StatusBanner({
-  status, reason, onLoadFunds, onUpdateCard,
+  status, reason, isLive, onLoadFunds, onUpdateCard,
 }: {
   status: BillingState["status"];
   reason: BillingState["paused_reason"];
+  isLive: boolean;
   onLoadFunds: () => void;
   onUpdateCard: () => void;
 }) {
-  if (status === "active") return (
+  if (isLive) return (
     <div className="flex items-center gap-2.5 rounded-xl border border-emerald-200/80 bg-emerald-50/60 px-4 py-2.5">
       <div className="size-2 rounded-full bg-emerald-500 shrink-0 animate-pulse" />
       <p className="text-sm font-medium text-emerald-800">Program active — members can earn cashback at your restaurant.</p>
+    </div>
+  );
+
+  if (status === "active") return (
+    <div className="flex items-center justify-between gap-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+      <div className="flex items-start gap-2.5">
+        <AlertTriangle className="size-4 shrink-0 text-amber-600 mt-0.5" />
+        <div>
+          <p className="text-sm font-semibold text-amber-900">Program paused — load funds to go live</p>
+          <p className="text-xs text-amber-700/90 mt-0.5">Your prepaid balance is empty. Members can't earn cashback until you add funds.</p>
+        </div>
+      </div>
+      <Button size="sm" onClick={onLoadFunds} className="shrink-0 bg-amber-600 hover:bg-amber-700 text-white text-xs h-8">Load funds</Button>
     </div>
   );
 
@@ -1193,6 +1209,7 @@ export default function BillingPage() {
       <StatusBanner
         status={billing.status}
         reason={billing.paused_reason}
+        isLive={billing.is_live}
         onLoadFunds={() => setAddFunds(true)}
         onUpdateCard={() => setPaygSheet(true)}
       />
