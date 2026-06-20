@@ -1327,11 +1327,6 @@ export default function BillingPage() {
 
       <HowYouPaySelector track={track} onTrackClick={handleTrackClick} />
 
-      <CardManagementSection
-        billing={billing}
-        onRefresh={refreshBilling}
-      />
-
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
         <Card className="lg:col-span-2">
           <CardHeader className="pb-3"><CardTitle className="text-base">Balance</CardTitle></CardHeader>
