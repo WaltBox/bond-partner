@@ -27,6 +27,7 @@ import {
   ExternalLink,
   Settings2,
   Loader2,
+  TrendingUp,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -510,8 +511,9 @@ interface FundingProjectionData {
     redemptions_funded:     number;
     people_per_reward:      number;
     guaranteed_sales_cents: number;
-    real_cost_cents:        number;
-    minimum_return_cents:   number;
+    cashback_cents:         number;
+    food_cost_cents:        number;
+    profit_cents:           number;
   } | null;
   reason?: string;
 }
@@ -577,17 +579,21 @@ function FundingProjection({ amountCents }: { amountCents: number }) {
 
       <div className="space-y-1.5 text-sm">
         <div className="flex justify-between">
-          <span className="text-muted-foreground">Guaranteed sales</span>
+          <span className="text-muted-foreground">Sales generated</span>
           <span className="font-semibold tabular-nums">{fmtFloor(projection.guaranteed_sales_cents)}</span>
         </div>
         <div className="flex justify-between">
-          <span className="text-muted-foreground">Your real cost</span>
-          <span className="font-semibold tabular-nums">− {fmtFloor(projection.real_cost_cents)}</span>
+          <span className="text-muted-foreground">Your invoice</span>
+          <span className="font-semibold tabular-nums">− {fmtFloor(projection.cashback_cents)}</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-muted-foreground">Cost to make food</span>
+          <span className="font-semibold tabular-nums">− {fmtFloor(projection.food_cost_cents)}</span>
         </div>
         <div className="h-px bg-border/60" />
         <div className="flex justify-between">
-          <span className="text-[11px] font-black uppercase tracking-widest text-muted-foreground">Minimum return</span>
-          <span className="text-base font-black tabular-nums">{fmtFloor(projection.minimum_return_cents)}</span>
+          <span className="text-[11px] font-black uppercase tracking-widest text-muted-foreground">You profit</span>
+          <span className="text-base font-black tabular-nums">{fmtFloor(projection.profit_cents)}</span>
         </div>
       </div>
 
@@ -597,6 +603,163 @@ function FundingProjection({ amountCents }: { amountCents: number }) {
           : "Conservative estimate until you have redemption data — your real numbers will likely be higher."}
       </p>
     </div>
+  );
+}
+
+// ─── Invoice simulator ────────────────────────────────────────────────────────
+
+const SIM_MIN  = 5000;    // $50
+const SIM_MAX  = 200000;  // $2,000
+const SIM_STEP = 1000;    // $10
+const SIM_PRESETS = [25000, 50000, 100000, 200000];
+
+function InvoiceSimulator({ currentTabCents }: { currentTabCents: number }) {
+  const [amount, setAmount]   = React.useState(25000);
+  const [data, setData]       = React.useState<FundingProjectionData | null>(null);
+  const [loading, setLoading] = React.useState(true);
+  const timerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  React.useEffect(() => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(async () => {
+      setLoading(true);
+      try {
+        const res = await bondFetch<FundingProjectionData>(
+          partnerPath("/billing/funding-projection"),
+          { method: "POST", body: JSON.stringify({ amount_cents: amount }) }
+        );
+        setData(res);
+      } catch { /* keep last */ }
+      finally { setLoading(false); }
+    }, 250);
+    return () => { if (timerRef.current) clearTimeout(timerRef.current); };
+  }, [amount]);
+
+  // No active/ projectable promo → don't show the simulator.
+  if (!loading && data && !data.projection) {
+    return (
+      <Card>
+        <CardHeader className="pb-3"><CardTitle className="text-base">Predict your invoice</CardTitle></CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground">Build an active promotion to predict your invoice.</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const p     = data?.projection ?? null;
+  const lossy = !!p && p.profit_cents < 0;
+  const pctOf = (c: number) => `${Math.round(((c - SIM_MIN) / (SIM_MAX - SIM_MIN)) * 100)}%`;
+  const tabInRange = currentTabCents > SIM_MIN && currentTabCents < SIM_MAX;
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <div className="flex items-center gap-2">
+          <span className="flex size-7 items-center justify-center rounded-full border-[2px] border-[#1a1a1a] bg-[#5DD96E] text-[#1a1a1a]">
+            <TrendingUp className="size-4" />
+          </span>
+          <CardTitle className="text-base">Predict your invoice</CardTitle>
+        </div>
+        {data?.promotion && (
+          <p className="text-xs text-muted-foreground">Based on &ldquo;{data.promotion.name}&rdquo;</p>
+        )}
+      </CardHeader>
+      <CardContent className="space-y-5">
+        {/* Amount + slider */}
+        <div className="space-y-3">
+          <div className="flex items-baseline justify-between">
+            <span className="text-xs font-semibold text-muted-foreground">If your invoice reaches</span>
+            <span className="font-display text-2xl font-extrabold tabular-nums">{fmtFloor(amount)}</span>
+          </div>
+          <div className="relative pt-1">
+            <input
+              type="range"
+              min={SIM_MIN}
+              max={SIM_MAX}
+              step={SIM_STEP}
+              value={amount}
+              onChange={e => setAmount(Number(e.target.value))}
+              className="w-full accent-[#1a1a1a] cursor-pointer"
+            />
+            {/* Current-tab marker */}
+            {tabInRange && (
+              <div
+                className="pointer-events-none absolute -bottom-1 flex -translate-x-1/2 flex-col items-center"
+                style={{ left: pctOf(currentTabCents) }}
+              >
+                <div className="h-2 w-0.5 bg-[#1a1a1a]" />
+                <span className="mt-0.5 whitespace-nowrap text-[9px] font-bold text-[#1a1a1a]">you&apos;re here</span>
+              </div>
+            )}
+          </div>
+          <div className="flex justify-between text-[11px] text-muted-foreground">
+            <span>{fmtFloor(SIM_MIN)}</span>
+            <span>{fmtFloor(SIM_MAX)}</span>
+          </div>
+          <div className="flex flex-wrap gap-2 pt-1">
+            {SIM_PRESETS.map(preset => (
+              <button
+                key={preset}
+                onClick={() => setAmount(preset)}
+                className={`rounded-full border-[2px] px-2.5 py-0.5 text-xs font-bold transition-colors ${
+                  amount === preset ? "border-[#1a1a1a] bg-[#FFC93C] text-[#1a1a1a]" : "border-border text-muted-foreground hover:border-[#1a1a1a]/40"
+                }`}
+              >
+                {fmtFloor(preset)}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Breakdown */}
+        {p && (
+          <div className={`space-y-1.5 rounded-xl border-[2px] border-[#1a1a1a] bg-card p-4 text-sm shadow-[3px_3px_0_0_#1a1a1a] transition-opacity ${loading ? "opacity-60" : ""}`}>
+            <p className="text-xs text-muted-foreground">~{p.redemptions_funded} redemptions</p>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Sales generated</span>
+              <span className="font-semibold tabular-nums">{fmtFloor(p.guaranteed_sales_cents)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Your invoice</span>
+              <span className="font-semibold tabular-nums">− {fmtFloor(p.cashback_cents)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Cost to make food</span>
+              <span className="font-semibold tabular-nums">− {fmtFloor(p.food_cost_cents)}</span>
+            </div>
+            <div className="h-px bg-border/60" />
+            <div className="flex justify-between">
+              <span className="text-[11px] font-black uppercase tracking-widest text-muted-foreground">You profit</span>
+              <span className={`text-base font-black tabular-nums ${lossy ? "text-destructive" : ""}`}>{fmtFloor(p.profit_cents)}</span>
+            </div>
+          </div>
+        )}
+
+        {/* Live takeaway */}
+        {p && (
+          lossy ? (
+            <p className="text-xs text-destructive leading-snug">
+              This promo loses money as structured. Try a lower-cost reward.
+            </p>
+          ) : (
+            <div className="rounded-xl border-[2px] border-[#1a1a1a] bg-[#FFF5E8] px-3.5 py-2.5">
+              <p className="text-xs leading-snug text-[#1a1a1a]">
+                💡 A {fmtFloor(amount)} invoice means ~{p.redemptions_funded} tables and{" "}
+                <span className="font-bold">{fmtFloor(p.profit_cents)} in profit</span> — a bigger invoice just means the
+                program drove more traffic.
+              </p>
+            </div>
+          )
+        )}
+
+        {data?.group_size_source === "default" && (
+          <p className="text-[11px] text-muted-foreground leading-snug">
+            Conservative estimate until you have redemption data — real numbers will likely be higher.
+          </p>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -1604,6 +1767,7 @@ export default function BillingPage() {
         </Card>
 
         <div className="space-y-6 lg:col-span-3">
+          {track === "payg" && <InvoiceSimulator currentTabCents={-billing.balance_cents} />}
           <PerformanceCard perf={perf} />
           <Ledger />
           {track === "payg" && settlement === "net_terms" && <InvoiceHistory />}

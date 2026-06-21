@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { Sparkles, Send, Check, Loader2, Info, CheckCircle2, Clock, XCircle, CircleDot, Megaphone, ArrowRight } from "lucide-react";
+import { Sparkles, Send, Check, Loader2, Info, CheckCircle2, Clock, XCircle, CircleDot, Megaphone, ArrowRight, ChevronDown } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -36,10 +36,9 @@ interface Reward {
 }
 
 interface PricingItem {
-  label:            string;
-  role:             "reward" | "requirement";
-  needs_menu_price: boolean;
-  needs_cogs:       boolean;
+  label:       string;
+  is_required: boolean;
+  is_reward:   boolean;
 }
 
 interface ParsedForm {
@@ -173,8 +172,8 @@ function RatingPanel({
   const [stale, setStale]       = React.useState(false);
   const timerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const rewardItem    = form.pricing_items.find(f => f.role === "reward");
-  const reqItems      = form.pricing_items.filter(f => f.role === "requirement");
+  const rewardItem    = form.pricing_items.find(f => f.is_reward);
+  const reqItems      = form.pricing_items.filter(f => f.is_required);
   const rewardValue   = rewardItem ? parseDollars(pricing[rewardItem.label]?.menu_price ?? "") : 0;
   const requiredValue = reqItems.reduce((sum, f) => sum + parseDollars(pricing[f.label]?.menu_price ?? ""), 0);
 
@@ -291,32 +290,42 @@ function RatingPanel({
 
 // ─── ROI types ────────────────────────────────────────────────────────────────
 
+interface RoiItem {
+  menu_price_cents: number;
+  cogs_cents:       number;
+  is_required:      boolean;
+  is_reward:        boolean;
+}
+
 interface RoiRequest {
-  budget_cents:                number;
-  reward_menu_price_cents:     number;
-  reward_cogs_cents:           number;
-  reward_kind:                 RewardKind;
-  reward_percent:              number | null;
-  reward_fixed_cents:          number | null;
-  reward_basis:                Basis;
-  reward_n:                    number | null;
-  required_menu_prices_cents:  number[];
+  budget_cents:       number;
+  items:              RoiItem[];
+  reward_kind:        RewardKind;
+  reward_percent:     number | null;
+  reward_fixed_cents: number | null;
+  reward_basis:       Basis;
+  reward_n:           number | null;
 }
 
 interface RoiResult {
+  guaranteed_sales_cents:  number;
+  cashback_cents:          number;
+  food_cost_cents:         number;
+  profit_cents:            number;
+  redemptions_funded:      number;
+  people_per_reward:       number;
   avg_group_size:          number;
   group_size_source:       "history" | "default";
-  people_per_reward:       number;
-  redemptions_funded:      number;
-  guaranteed_sales_cents:  number;
-  real_cost_cents:         number;
-  minimum_return_cents:    number;
 }
 
 // ─── ROI Panel ────────────────────────────────────────────────────────────────
 
 function fmtCents(cents: number) {
   return `$${(cents / 100).toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
+}
+
+function fmtWhole(cents: number) {
+  return `$${Math.round(cents / 100).toLocaleString("en-US")}`;
 }
 
 function ROIPanel({
@@ -339,29 +348,37 @@ function ROIPanel({
   const [result, setResult]           = React.useState<RoiResult | null>(null);
   const [fetching, setFetching]       = React.useState(false);
   const [zeroBudget, setZeroBudget]   = React.useState(false);
+  const [showMath, setShowMath]       = React.useState(false);
   const timerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function buildPayload(): RoiRequest | null {
-    const rewardItem = form.pricing_items.find(f => f.role === "reward");
-    const reqItems   = form.pricing_items.filter(f => f.role === "requirement");
+    const rewardItem = form.pricing_items.find(f => f.is_reward);
+    const budgetCents = parseDollars(budgetInput);
+    const rewardMenuPrice = rewardItem ? parseDollars(pricing[rewardItem.label]?.menu_price ?? "") : 0;
+    const rewardCogs = rewardItem ? parseDollars(pricing[rewardItem.label]?.cogs ?? "") : 0;
 
-    const budgetCents      = parseDollars(budgetInput);
-    const rewardMenuPrice  = rewardItem ? parseDollars(pricing[rewardItem.label]?.menu_price ?? "") : 0;
-    const reqPrices        = reqItems.map(f => parseDollars(pricing[f.label]?.menu_price ?? "")).filter(v => v > 0);
+    // Gate: budget + reward priced (menu + cogs).
+    if (!budgetCents || !rewardMenuPrice || !rewardCogs) return null;
 
-    if (!budgetCents || !rewardMenuPrice || reqPrices.length === 0) return null;
+    const items: RoiItem[] = form.pricing_items.map(f => ({
+      menu_price_cents: parseDollars(pricing[f.label]?.menu_price ?? ""),
+      cogs_cents:       parseDollars(pricing[f.label]?.cogs ?? ""),
+      is_required:      f.is_required,
+      is_reward:        f.is_reward,
+    }));
+
+    // Need at least one required item with a menu price.
+    if (!items.some(i => i.is_required && i.menu_price_cents > 0)) return null;
 
     const kind = form.reward.kind;
     return {
-      budget_cents:               budgetCents,
-      reward_menu_price_cents:    rewardMenuPrice,
-      reward_cogs_cents:          rewardItem ? parseDollars(pricing[rewardItem.label]?.cogs ?? "") : 0,
-      reward_kind:                kind,
-      reward_percent:             (kind === "percent_off_item" || kind === "percent_back") ? (form.reward.percent ?? null) : null,
-      reward_fixed_cents:         kind === "fixed_off_item" ? (form.reward.fixed_off_cents ?? null) : null,
-      reward_basis:               form.reward.basis,
-      reward_n:                   form.reward.basis === "per_n_heads" ? (form.reward.n ?? null) : null,
-      required_menu_prices_cents: reqPrices,
+      budget_cents:       budgetCents,
+      items,
+      reward_kind:        kind,
+      reward_percent:     (kind === "percent_off_item" || kind === "percent_back") ? (form.reward.percent ?? null) : null,
+      reward_fixed_cents: kind === "fixed_off_item" ? (form.reward.fixed_off_cents ?? null) : null,
+      reward_basis:       form.reward.basis,
+      reward_n:           form.reward.basis === "per_n_heads" ? (form.reward.n ?? null) : null,
     };
   }
 
@@ -389,13 +406,18 @@ function ROIPanel({
     return () => { if (timerRef.current) clearTimeout(timerRef.current); };
   }, [budgetInput, pricing, form]);
 
-  const dash = <span className="text-muted-foreground/30">—</span>;
+  const budgetCents     = parseDollars(budgetInput);
+  const profitPct       = result && budgetCents ? Math.round((result.profit_cents / budgetCents) * 100) : null;
+  const perRedemption   = result && result.redemptions_funded ? result.cashback_cents / result.redemptions_funded : 0;
+  const lossy           = !!result && result.profit_cents < 0;
 
-  function Row({ label, value }: { label: string; value: React.ReactNode }) {
+  function MathRow({ label, value, sign }: { label: string; value: string; sign?: "+" | "−" | "=" }) {
     return (
       <div className="flex items-center justify-between gap-3">
         <p className="text-sm text-muted-foreground">{label}</p>
-        <span className="text-sm font-semibold tabular-nums">{value}</span>
+        <span className={`text-sm tabular-nums ${sign === "=" ? "font-black text-foreground" : "font-semibold"}`}>
+          {sign === "−" ? "− " : ""}{value}
+        </span>
       </div>
     );
   }
@@ -432,26 +454,74 @@ function ROIPanel({
           <p className="text-xs text-amber-600 font-medium">Increase your budget to fund at least one reward.</p>
         ) : (
           <>
-            <Row label="Guaranteed sales"  value={result ? fmtCents(result.guaranteed_sales_cents) : dash} />
-            <Row label="Your real cost"    value={result ? `− ${fmtCents(result.real_cost_cents)}` : dash} />
-            <div className="h-px bg-border/60" />
-
-            {/* Hero number */}
-            <div className="space-y-0.5">
-              <p className="text-[11px] font-black uppercase tracking-widest text-muted-foreground">Minimum return</p>
-              <p className={`text-3xl font-black tabular-nums tracking-tight ${fetching ? "opacity-40" : ""}`}>
-                {result ? fmtCents(result.minimum_return_cents) : "—"}
+            {/* Hero: profit */}
+            <div className={`space-y-0.5 ${fetching ? "opacity-40 transition-opacity" : "transition-opacity"}`}>
+              <p className="text-[11px] font-black uppercase tracking-widest text-muted-foreground">
+                {lossy ? "Loses money" : "Profit"}
               </p>
+              <p className={`text-3xl font-black tabular-nums tracking-tight ${lossy ? "text-destructive" : ""}`}>
+                {result ? fmtWhole(result.profit_cents) : "—"}
+              </p>
+              {result && budgetCents > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  on {fmtWhole(budgetCents)} in
+                  {profitPct != null && (
+                    <span className={`ml-1.5 font-bold ${lossy ? "text-destructive" : "text-success"}`}>
+                      {profitPct >= 0 ? "+" : ""}{profitPct}%
+                    </span>
+                  )}
+                </p>
+              )}
             </div>
 
-            <p className="text-xs text-muted-foreground leading-snug">
-              {result?.group_size_source === "history"
-                ? `That's the floor — based on your average table of ${result.avg_group_size}. It only goes up as guests order more.`
-                : "That's the floor using a conservative estimate — your real numbers will likely be higher once you have redemption data."}
-            </p>
+            {lossy && (
+              <p className="text-[11px] text-destructive leading-snug">
+                This promo loses money as structured. Try a lower-cost reward or a higher required spend.
+              </p>
+            )}
 
-            {result && !pricing[form.pricing_items.find(f => f.role === "reward")?.label ?? ""]?.cogs && (
-              <p className="text-[11px] text-amber-600">Fill in cost-to-make for the reward to see your accurate real cost.</p>
+            {result && (
+              <>
+                <div className="h-px bg-border/60" />
+
+                <button
+                  onClick={() => setShowMath(s => !s)}
+                  className="flex items-center gap-1 text-xs font-bold text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  See the math
+                  <ChevronDown className={`size-3.5 transition-transform ${showMath ? "rotate-180" : ""}`} />
+                </button>
+
+                {showMath && (
+                  <div className="space-y-2.5 rounded-xl border border-border/60 bg-secondary/30 p-3.5 animate-fade-in">
+                    {perRedemption > 0 && (
+                      <p className="text-xs text-muted-foreground">
+                        {fmtWhole(budgetCents)} ÷ {fmtCents(perRedemption)} cashback ={" "}
+                        <span className="font-semibold text-foreground">{result.redemptions_funded} redemptions</span>
+                      </p>
+                    )}
+                    <div className="space-y-1.5">
+                      <MathRow label="Guaranteed sales"   value={fmtWhole(result.guaranteed_sales_cents)} sign="+" />
+                      <MathRow label="Cashback you fund"  value={fmtWhole(result.cashback_cents)}         sign="−" />
+                      <MathRow label="Cost to make food"  value={fmtWhole(result.food_cost_cents)}        sign="−" />
+                      <div className="h-px bg-border/60" />
+                      <MathRow label="Profit"             value={fmtWhole(result.profit_cents)}           sign="=" />
+                    </div>
+                    {!lossy && (
+                      <p className="text-[11px] text-muted-foreground leading-snug pt-1">
+                        ↳ Your {fmtWhole(budgetCents)} comes back through the sales it drives — you keep{" "}
+                        {fmtWhole(result.profit_cents)} on top.
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                <p className="text-xs text-muted-foreground leading-snug">
+                  {result.group_size_source === "history"
+                    ? `That's the floor — based on your average table of ${result.avg_group_size}. It only goes up as guests order more.`
+                    : "That's the floor using a conservative estimate — your real numbers will likely be higher once you have redemption data."}
+                </p>
+              </>
             )}
 
             <div className="h-px bg-border/60" />
@@ -500,10 +570,20 @@ function PricingForm({
       </p>
       {form.pricing_items.map(item => {
         const vals = pricing[item.label] ?? { menu_price: "", cogs: "" };
-        const isReward = item.role === "reward";
+        const isReward = item.is_reward;
         return (
           <div key={item.label} className="space-y-3 rounded-xl border border-border/60 bg-card p-4">
-            <p className="text-sm font-semibold">{item.label}</p>
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-sm font-semibold">{item.label}</p>
+              <div className="flex items-center gap-1.5">
+                {item.is_required && (
+                  <span className="rounded-full bg-secondary px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Required</span>
+                )}
+                {item.is_reward && (
+                  <span className="rounded-full bg-[#FFC93C] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[#1a1a1a]">Reward</span>
+                )}
+              </div>
+            </div>
 
             {/* Reward amount — what Bond pays back, varies by reward kind */}
             {isReward && (kind === "percent_off_item" || kind === "percent_back") && (
@@ -555,42 +635,38 @@ function PricingForm({
             )}
 
             <div className="grid grid-cols-2 gap-3">
-              {item.needs_menu_price && (
-                <div className="space-y-1.5">
-                  <Label className="text-xs text-muted-foreground">Menu price</Label>
-                  <div className="relative">
-                    <span className="pointer-events-none absolute left-2.5 top-1.5 text-sm text-muted-foreground">$</span>
-                    <Input
-                      className="h-8 pl-6 text-sm"
-                      type="number"
-                      min={0}
-                      step={0.01}
-                      placeholder="0.00"
-                      value={vals.menu_price}
-                      onChange={e => onChange(item.label, { ...vals, menu_price: e.target.value })}
-                    />
-                  </div>
-                  <p className="text-[11px] text-muted-foreground">What you charge</p>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Menu price</Label>
+                <div className="relative">
+                  <span className="pointer-events-none absolute left-2.5 top-1.5 text-sm text-muted-foreground">$</span>
+                  <Input
+                    className="h-8 pl-6 text-sm"
+                    type="number"
+                    min={0}
+                    step={0.01}
+                    placeholder="0.00"
+                    value={vals.menu_price}
+                    onChange={e => onChange(item.label, { ...vals, menu_price: e.target.value })}
+                  />
                 </div>
-              )}
-              {item.needs_cogs && (
-                <div className="space-y-1.5">
-                  <Label className="text-xs text-muted-foreground">Cost to make</Label>
-                  <div className="relative">
-                    <span className="pointer-events-none absolute left-2.5 top-1.5 text-sm text-muted-foreground">$</span>
-                    <Input
-                      className="h-8 pl-6 text-sm"
-                      type="number"
-                      min={0}
-                      step={0.01}
-                      placeholder="0.00"
-                      value={vals.cogs}
-                      onChange={e => onChange(item.label, { ...vals, cogs: e.target.value })}
-                    />
-                  </div>
-                  <p className="text-[11px] text-muted-foreground">Your COGS (private)</p>
+                <p className="text-[11px] text-muted-foreground">What you charge</p>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Cost to make</Label>
+                <div className="relative">
+                  <span className="pointer-events-none absolute left-2.5 top-1.5 text-sm text-muted-foreground">$</span>
+                  <Input
+                    className="h-8 pl-6 text-sm"
+                    type="number"
+                    min={0}
+                    step={0.01}
+                    placeholder="0.00"
+                    value={vals.cogs}
+                    onChange={e => onChange(item.label, { ...vals, cogs: e.target.value })}
+                  />
                 </div>
-              )}
+                <p className="text-[11px] text-muted-foreground">Your COGS (private)</p>
+              </div>
             </div>
           </div>
         );
@@ -798,11 +874,11 @@ export default function PromotionsPage() {
   // Gate: reward needs menu_price + COGS, at least one requirement needs menu_price
   function canSubmit(): boolean {
     if (!currentForm || !confirmed) return false;
-    const rewardItem = currentForm.pricing_items.find(f => f.role === "reward");
-    const reqItems   = currentForm.pricing_items.filter(f => f.role === "requirement");
+    const rewardItem = currentForm.pricing_items.find(f => f.is_reward);
+    const reqItems   = currentForm.pricing_items.filter(f => f.is_required);
     if (!rewardItem) return false;
     const rv = pricing[rewardItem.label];
-    if (!rv?.menu_price || (rewardItem.needs_cogs && !rv.cogs)) return false;
+    if (!rv?.menu_price || !rv?.cogs) return false;
     return reqItems.some(f => !!pricing[f.label]?.menu_price);
   }
 
@@ -815,7 +891,7 @@ export default function PromotionsPage() {
       const entry: { menu_price_cents: number; cogs_cents?: number } = {
         menu_price_cents: parseDollars(v?.menu_price ?? ""),
       };
-      if (item.needs_cogs && v?.cogs) entry.cogs_cents = parseDollars(v.cogs);
+      if (v?.cogs) entry.cogs_cents = parseDollars(v.cogs);
       pricingBody[item.label] = entry;
     }
 
