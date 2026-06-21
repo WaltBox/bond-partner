@@ -479,13 +479,104 @@ function CardManagementSection({
   );
 }
 
+// ─── Funding projection widget ────────────────────────────────────────────────
+
+interface FundingProjectionData {
+  promotion:         { id: string; name: string } | null;
+  avg_group_size:    number;
+  group_size_source: "history" | "default";
+  projection: {
+    amount_cents:           number;
+    redemptions_funded:     number;
+    people_per_reward:      number;
+    guaranteed_sales_cents: number;
+    real_cost_cents:        number;
+    minimum_return_cents:   number;
+  } | null;
+  reason?: string;
+}
+
+function fmtFloor(cents: number) {
+  return `$${(cents / 100).toLocaleString("en-US", { minimumFractionDigits: 0 })}`;
+}
+
+function FundingProjection({ amountCents }: { amountCents: number }) {
+  const [data, setData]       = React.useState<FundingProjectionData | null>(null);
+  const [loading, setLoading] = React.useState(false);
+  const timerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  React.useEffect(() => {
+    if (!amountCents) { setData(null); return; }
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(async () => {
+      setLoading(true);
+      try {
+        const res = await bondFetch<FundingProjectionData>(
+          partnerPath("/billing/funding-projection"),
+          { method: "POST", body: JSON.stringify({ amount_cents: amountCents }) }
+        );
+        setData(res);
+      } catch { /* silent */ }
+      finally { setLoading(false); }
+    }, 300);
+    return () => { if (timerRef.current) clearTimeout(timerRef.current); };
+  }, [amountCents]);
+
+  if (!amountCents) return null;
+  if (loading && !data) return (
+    <div className="rounded-xl border-[2px] border-[#1a1a1a] bg-card p-4 space-y-3 shadow-[3px_3px_0_0_#1a1a1a] animate-pulse">
+      <p className="text-[11px] font-black uppercase tracking-widest text-muted-foreground">Projection</p>
+      <div className="h-3 w-40 rounded bg-muted" />
+      <div className="h-6 w-28 rounded bg-muted" />
+      <div className="h-3 w-52 rounded bg-muted" />
+    </div>
+  );
+  if (!data?.projection) return null;
+
+  const { projection, promotion, avg_group_size, group_size_source } = data;
+
+  return (
+    <div className={`rounded-xl border-[2px] border-[#1a1a1a] bg-card p-4 space-y-3 shadow-[3px_3px_0_0_#1a1a1a] transition-opacity ${loading ? "opacity-60" : ""}`}>
+      <div>
+        <p className="text-[11px] font-black uppercase tracking-widest text-muted-foreground">This funds your</p>
+        <p className="text-sm font-bold mt-0.5">"{promotion?.name}"</p>
+      </div>
+
+      <p className="text-xs text-muted-foreground">~{projection.redemptions_funded} redemptions</p>
+
+      <div className="space-y-1.5 text-sm">
+        <div className="flex justify-between">
+          <span className="text-muted-foreground">Guaranteed sales</span>
+          <span className="font-semibold tabular-nums">{fmtFloor(projection.guaranteed_sales_cents)}</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-muted-foreground">Your real cost</span>
+          <span className="font-semibold tabular-nums">− {fmtFloor(projection.real_cost_cents)}</span>
+        </div>
+        <div className="h-px bg-border/60" />
+        <div className="flex justify-between">
+          <span className="text-[11px] font-black uppercase tracking-widest text-muted-foreground">Minimum return</span>
+          <span className="text-base font-black tabular-nums">{fmtFloor(projection.minimum_return_cents)}</span>
+        </div>
+      </div>
+
+      <p className="text-[11px] text-muted-foreground leading-snug">
+        {group_size_source === "history"
+          ? `The floor — based on your average table of ${avg_group_size}. Only goes up as guests order more.`
+          : "Conservative estimate until you have redemption data — your real numbers will likely be higher."}
+      </p>
+    </div>
+  );
+}
+
 // ─── Sheet: Switch to Prepaid ─────────────────────────────────────────────────
 
 function SwitchToPrepaidSheet({
-  open, billing, onClose, onSuccess, onSetupComplete,
+  open, billing, isAlreadyPrepaid, onClose, onSuccess, onSetupComplete,
 }: {
   open: boolean;
   billing: BillingState;
+  isAlreadyPrepaid: boolean;
   onClose: () => void;
   onSuccess: (amount: number, config: { low_balance_threshold_cents: number; refill_target_cents: number; prepaid_empty_action: "pause" | "continue" }) => Promise<void>;
   onSetupComplete: () => void;
@@ -531,8 +622,8 @@ function SwitchToPrepaidSheet({
               <Wallet className="size-4 text-[#1a1a1a]" />
             </div>
             <div>
-              <SheetTitle>Switch to Prepaid</SheetTitle>
-              <SheetDescription className="text-xs">Load funds to get started. Program runs while balance lasts.</SheetDescription>
+              <SheetTitle>{isAlreadyPrepaid ? "Add funds" : "Switch to Prepaid"}</SheetTitle>
+              <SheetDescription className="text-xs">{isAlreadyPrepaid ? "Funds are added to your balance instantly." : "Load funds to get started. Program runs while balance lasts."}</SheetDescription>
             </div>
           </div>
         </SheetHeader>
@@ -555,6 +646,8 @@ function SwitchToPrepaidSheet({
               <Input className="pl-7 h-9 text-sm" placeholder="Custom amount" value={custom} onChange={e => { setCustom(e.target.value); setAmount(null); }} type="number" min="10" />
             </div>
           </div>
+
+          <FundingProjection amountCents={fundAmount} />
 
           {/* When balance runs low */}
           <div className="space-y-3">
@@ -611,7 +704,7 @@ function SwitchToPrepaidSheet({
 
         <div className="border-t border-border/60 px-6 py-4">
           <YellowButton disabled={!canSubmit || busy} onClick={submit}>
-            {busy ? "Switching…" : fundAmount > 0 && hasCard(billing) ? `Load ${formatCents(fundAmount)} & switch to Prepaid` : hasCard(billing) ? "Enter an amount to continue" : "Save a card to continue"}
+            {busy ? (isAlreadyPrepaid ? "Loading…" : "Switching…") : fundAmount > 0 && hasCard(billing) ? (isAlreadyPrepaid ? `Add ${formatCents(fundAmount)}` : `Load ${formatCents(fundAmount)} & switch to Prepaid`) : hasCard(billing) ? "Enter an amount to continue" : "Save a card to continue"}
           </YellowButton>
         </div>
       </SheetContent>
@@ -811,6 +904,8 @@ function AddFundsSheet({
               <Input className="pl-7 h-9 text-sm" placeholder="Custom amount" value={custom} onChange={e => { setCustom(e.target.value); setAmount(null); }} type="number" min="1" />
             </div>
           </div>
+
+          <FundingProjection amountCents={fundAmount} />
 
           {hasCard(billing) ? (
             <div className="flex items-center gap-2.5 rounded-xl border border-border bg-secondary/30 px-4 py-3">
@@ -1346,6 +1441,7 @@ export default function BillingPage() {
       <SwitchToPrepaidSheet
         open={prepaidSheet}
         billing={billing}
+        isAlreadyPrepaid={track === "prepaid"}
         onClose={() => setPrepaidSheet(false)}
         onSuccess={handlePrepaidSuccess}
         onSetupComplete={handleSetupComplete}

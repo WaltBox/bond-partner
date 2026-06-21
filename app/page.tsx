@@ -44,8 +44,7 @@ export default function HomePage() {
             .
           </h1>
           <p className="mx-auto mt-6 max-w-xl text-lg leading-relaxed text-[#1a1a1a]/80" style={{ fontWeight: 500 }}>
-            Bond sends hungry <strong className="font-black text-[#1a1a1a]">cribs</strong> your way. Scan the receipt,
-            pay a little back, and watch the regulars roll in. This portal shows what Bond drives you — down to the taco. 🌮
+            Most marketing is a tax. Bond is a trade — groups spend above a threshold, their own extra spend funds their cashback, and you keep the table that would have sat empty. Your real cost is just the food you comped.
           </p>
 
           <div className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
@@ -82,14 +81,14 @@ export default function HomePage() {
             <span style={{ fontFamily: "var(--font-caveat)", fontWeight: 700, color: "#FFC93C" }}>love</span> bond
           </h2>
           <div className="mt-10 grid grid-cols-1 gap-5 md:grid-cols-3">
-            <ValueCard tone="#D4DEFF" emoji="🌙" title="fill the slow nights">
-              Cribs and their Circles show up midweek, when your tables would sit empty.
+            <ValueCard tone="#D4DEFF" emoji="🌙" title="incremental tables, not discounted ones">
+              Bond groups plan ahead and commit to a spend floor before they walk in. You're not discounting regulars — you're filling seats that would have been empty.
             </ValueCard>
-            <ValueCard tone="#FFF5E8" emoji="✅" title="only pay on real sales">
-              What you owe is a slice of spend Bond created — never a flat ad fee with nothing to show.
+            <ValueCard tone="#FFF5E8" emoji="✅" title="their spend funds their reward">
+              The cashback your diners receive comes from their own incremental spend cycling back through Bond — not straight out of your margins. It's a pass-through, not a subsidy.
             </ValueCard>
-            <ValueCard tone="#E8FBEA" emoji="🔍" title="see your true cost">
-              Set your cost-to-make and watch exactly what each payback costs you vs. what it drives.
+            <ValueCard tone="#E8FBEA" emoji="🔍" title="your real cost is just the food">
+              What you actually owe is the cost-to-make of what you comped — your True Cost. Set it in your portal and see exactly what each ticket costs you vs. what it drove.
             </ValueCard>
           </div>
         </div>
@@ -105,11 +104,11 @@ export default function HomePage() {
             className="text-4xl sm:text-6xl"
             style={{ fontFamily: "var(--font-baloo)", fontWeight: 800, letterSpacing: "-0.03em", lineHeight: 0.95 }}
           >
-            squad up. eat out.{" "}
-            <span style={{ fontFamily: "var(--font-caveat)", fontWeight: 700, color: "#6B80E6" }}>get paid back.</span>
+            a full table{" "}
+            <span style={{ fontFamily: "var(--font-caveat)", fontWeight: 700, color: "#6B80E6" }}>at a known cost.</span>
           </h2>
           <p className="max-w-md text-lg text-[#1a1a1a]/80" style={{ fontWeight: 500 }}>
-            Bring Bond diners to your spot. See the value in your portal from day one.
+            No flat fees, no guesswork. You know the cost before they walk in — and you keep everything above it.
           </p>
           <WhiteButton href={DEMO_URL} external large>
             <CalendarClock className="size-5" />

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Receipt, FileText, Settings, HelpCircle, Images, LogOut } from "lucide-react";
+import { LayoutDashboard, Receipt, FileText, Settings, HelpCircle, Images, LogOut, Megaphone } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BondLogo } from "./logo";
 import { ConfirmSignOut } from "./sign-out-button";
@@ -13,7 +13,8 @@ import { PartnerAvatar } from "@/components/partner-avatar";
 const nav = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { label: "Tickets", href: "/tickets", icon: Receipt },
-  { label: "Moments", href: "/moments", icon: Images },
+  { label: "Moments",    href: "/moments",    icon: Images     },
+  { label: "Promotions", href: "/promotions", icon: Megaphone  },
   { label: "Billing", href: "/billing", icon: FileText },
   { label: "FAQ", href: "/faq", icon: HelpCircle },
   { label: "Settings", href: "/settings", icon: Settings },
