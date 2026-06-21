@@ -3,7 +3,6 @@
 import { DollarSign, Wallet, BarChart3, Users, Zap, Tag, AlertCircle } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { FilterableMetricCard } from "@/components/dashboard/filterable-metric-card";
-import { AiNote } from "@/components/dashboard/ai-note";
 import { SalesTrendCard } from "@/components/dashboard/sales-trend-card";
 import { PaybackFlow } from "@/components/dashboard/payback-flow";
 import { MomentsPreview } from "@/components/dashboard/moments-preview";
@@ -82,14 +81,6 @@ export default function DashboardPage() {
             />
           </div>
 
-          {/* AI note */}
-          <AiNote
-            salesDrivenCents={tm.data.salesDrivenCents}
-            paidBackCents={tm.data.owedToBondCents}
-            trueCostCents={tm.data.trueCostCents}
-            roi={tm.data.roi}
-          />
-
           {/* What diners are posting */}
           <MomentsPreview />
 
@@ -100,12 +91,14 @@ export default function DashboardPage() {
           <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
             <SourceCard
               label="Perks"
-              icon={<Tag className="size-4" />}
+              icon={<Tag className="size-[18px]" />}
+              chip="#FF85B8"
               data={tm.data.bySource.promo}
             />
             <SourceCard
               label="Super Perks"
-              icon={<Zap className="size-4" />}
+              icon={<Zap className="size-[18px]" />}
+              chip="#FFC93C"
               data={tm.data.bySource.super_perk}
             />
           </div>
@@ -137,35 +130,42 @@ export default function DashboardPage() {
 function SourceCard({
   label,
   icon,
+  chip,
   data,
 }: {
   label: string;
   icon: React.ReactNode;
+  chip: string;
   data: SourceBreakdown;
 }) {
   return (
-    <Card className="p-5">
-      <div className="flex items-center gap-2">
-        <span className="flex size-7 items-center justify-center rounded-md bg-secondary text-muted-foreground">
+    <div className="rounded-2xl border-[2.5px] border-[#1a1a1a] bg-white p-5 shadow-[4px_4px_0_0_#1a1a1a] transition-all duration-150 hover:-translate-x-[2px] hover:-translate-y-[2px] hover:shadow-[6px_6px_0_0_#1a1a1a]">
+      <div className="flex items-center gap-2.5">
+        <span
+          className="flex size-9 items-center justify-center rounded-full border-[2.5px] border-[#1a1a1a] text-[#1a1a1a] shadow-[2.5px_2.5px_0_0_#1a1a1a]"
+          style={{ backgroundColor: chip }}
+        >
           {icon}
         </span>
-        <p className="text-sm font-medium text-foreground">{label}</p>
-        <span className="ml-auto text-xs text-muted-foreground tabular">{data.ticketCount} tickets</span>
+        <p className="font-display text-base font-bold text-[#1a1a1a]">{label}</p>
+        <span className="ml-auto rounded-full border-[2px] border-[#1a1a1a] bg-white px-2 py-0.5 text-xs font-bold text-[#1a1a1a] tabular">
+          {data.ticketCount} tickets
+        </span>
       </div>
       <div className="mt-4 grid grid-cols-2 gap-3">
         <div>
-          <p className="text-xs text-muted-foreground">Sales driven</p>
-          <p className="mt-0.5 text-base font-semibold text-foreground tabular">
+          <p className="text-xs font-semibold text-[#1a1a1a]/55">Sales driven</p>
+          <p className="mt-0.5 font-display text-xl font-extrabold text-[#1a1a1a] tabular">
             {formatCentsWhole(data.salesCents)}
           </p>
         </div>
         <div>
-          <p className="text-xs text-muted-foreground">Paid back</p>
-          <p className="mt-0.5 text-base font-semibold text-foreground tabular">
+          <p className="text-xs font-semibold text-[#1a1a1a]/55">Paid back</p>
+          <p className="mt-0.5 font-display text-xl font-extrabold text-[#1a1a1a] tabular">
             {formatCentsWhole(data.owedCents)}
           </p>
         </div>
       </div>
-    </Card>
+    </div>
   );
 }

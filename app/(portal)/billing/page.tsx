@@ -48,7 +48,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { PageHeader } from "@/components/page-header";
-import { formatCents } from "@/lib/format";
+import { formatCents, formatCentsWhole } from "@/lib/format";
 import { bondFetch, partnerPath } from "@/lib/api/client";
 
 // ─── Stripe ───────────────────────────────────────────────────────────────────
@@ -75,6 +75,26 @@ interface BillingState {
   auto_pay_threshold_cents:    number | null;
   has_payment_method:          boolean;
   payment_method:              { brand: string; last4: string } | null;
+}
+
+interface PerformanceGoal {
+  based_on_deposit_cents:  number;
+  projected_sales_cents:   number;
+  projected_return_cents:  number;
+  progress_pct:            number;
+}
+
+interface PerformanceCycle {
+  redemptions:             number;
+  sales_generated_cents:   number;
+  return_generated_cents:  number;
+}
+
+interface BillingPerformance {
+  cycle_started_at: string | null;
+  this_cycle:       PerformanceCycle;
+  lifetime:         PerformanceCycle;
+  goal:             PerformanceGoal | null;
 }
 
 interface LedgerEvent {
@@ -1031,12 +1051,128 @@ function PayTabSheet({
 
 // ─── Balance cards ────────────────────────────────────────────────────────────
 
+// ─── Performance card ─────────────────────────────────────────────────────────
+
+function PerformanceCard({ perf }: { perf: BillingPerformance | null }) {
+  if (!perf) {
+    // skeleton while loading
+    return (
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Performance</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-3 animate-pulse">
+            <div className="h-8 w-32 rounded bg-secondary" />
+            <div className="h-3 w-48 rounded bg-secondary" />
+            <div className="h-2 rounded-full bg-secondary" />
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const { this_cycle, cycle_started_at, goal } = perf;
+  const noRedemptions = this_cycle.redemptions === 0;
+  const cycleLabel    = cycle_started_at
+    ? `since your last payment on ${new Date(cycle_started_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}`
+    : "since you started";
+
+  // ── Prepaid: goal progress ──
+  if (goal) {
+    const pct       = Math.min(100, goal.progress_pct);
+    const hit100    = pct >= 100;
+    return (
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">
+            Your {formatCentsWhole(goal.based_on_deposit_cents)} is working
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {noRedemptions ? (
+            <p className="text-sm text-muted-foreground">No redemptions yet — sales will show here as guests redeem.</p>
+          ) : hit100 ? (
+            <>
+              <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Projection hit</p>
+              <p className="text-[36px] font-extrabold tracking-tight leading-none tabular-nums text-emerald-600">
+                {formatCentsWhole(this_cycle.sales_generated_cents)}
+              </p>
+              <p className="text-xs font-medium text-emerald-600">
+                You've already hit your projection. Everything from here is upside.
+              </p>
+            </>
+          ) : (
+            <>
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Sales generated</p>
+                <p className="mt-1 text-[36px] font-extrabold tracking-tight leading-none tabular-nums">
+                  {formatCentsWhole(this_cycle.sales_generated_cents)}
+                  <span className="ml-2 text-base font-semibold text-muted-foreground">
+                    of {formatCentsWhole(goal.projected_sales_cents)}
+                  </span>
+                </p>
+              </div>
+              <div className="space-y-1.5">
+                <div className="h-2.5 overflow-hidden rounded-full bg-secondary">
+                  <div
+                    className="h-full rounded-full bg-emerald-500 transition-all"
+                    style={{ width: `${pct}%` }}
+                  />
+                </div>
+                <div className="flex justify-between text-[11px] text-muted-foreground">
+                  <span>{pct}% of projection</span>
+                  <span>Goal {formatCentsWhole(goal.projected_sales_cents)}</span>
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">On track — keep it funded to keep going.</p>
+            </>
+          )}
+          <DetailBlock>
+            <DetailRow label="Redemptions this cycle">{this_cycle.redemptions}</DetailRow>
+            <DetailRow label="Cycle">{cycleLabel}</DetailRow>
+          </DetailBlock>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // ── Invoice / net_terms: cycle earnings ──
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base">This invoice cycle</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {noRedemptions ? (
+          <p className="text-sm text-muted-foreground">No redemptions yet — sales will show here as guests redeem.</p>
+        ) : (
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Sales generated</p>
+            <p className="mt-1 text-[42px] font-extrabold tracking-tight leading-none tabular-nums">
+              {formatCentsWhole(this_cycle.sales_generated_cents)}
+            </p>
+            <p className="mt-1.5 text-xs text-muted-foreground">
+              From {this_cycle.redemptions} redemption{this_cycle.redemptions !== 1 ? "s" : ""} · {cycleLabel}
+            </p>
+          </div>
+        )}
+        <DetailBlock>
+          <DetailRow label="Redemptions">{this_cycle.redemptions}</DetailRow>
+          <DetailRow label="Return generated">{formatCentsWhole(this_cycle.return_generated_cents)}</DetailRow>
+          <DetailRow label="Resets">when you pay your invoice</DetailRow>
+        </DetailBlock>
+      </CardContent>
+    </Card>
+  );
+}
+
 function PrepaidBalanceCard({ billing, onAddFunds }: { billing: BillingState; onAddFunds: () => void }) {
-  const balance   = billing.balance_cents; // positive = funds remaining
-  const threshold = billing.low_balance_threshold_cents ?? 5000;
-  const target    = billing.refill_target_cents ?? 50000;
-  const pct       = Math.min(100, Math.round((balance / target) * 100));
-  const isLow     = balance <= threshold;
+  const balance   = billing.balance_cents;
+  const threshold = billing.low_balance_threshold_cents;
+  const target    = billing.refill_target_cents;
+  const isLow     = threshold !== null && balance <= threshold;
+  const pct       = target ? Math.min(100, Math.round((balance / target) * 100)) : null;
 
   return (
     <div className="space-y-5">
@@ -1047,38 +1183,54 @@ function PrepaidBalanceCard({ billing, onAddFunds }: { billing: BillingState; on
             {formatCents(balance)}
           </p>
           <p className="mt-1.5 text-xs text-muted-foreground">
-            {billing.prepaid_empty_action === "continue" ? `Auto-reloads below ${formatCents(threshold)}` : "Program pauses at $0"}
+            {threshold !== null
+              ? (billing.prepaid_empty_action === "continue" ? `Auto-reloads below ${formatCents(threshold)}` : `Alert sent below ${formatCents(threshold)}`)
+              : "Program pauses at $0"}
           </p>
         </div>
         <YellowButton size="sm" onClick={onAddFunds} className="mb-1 h-9 px-4 text-xs gap-1.5">
           <Plus className="size-3.5" /> Add funds
         </YellowButton>
       </div>
-      <div className="space-y-1.5">
-        <div className="h-2.5 overflow-hidden rounded-full bg-secondary">
-          <div className={`h-full rounded-full transition-all ${isLow ? "bg-amber-400" : "bg-emerald-500"}`} style={{ width: `${pct}%` }} />
+
+      {pct !== null ? (
+        <div className="space-y-1.5">
+          <div className="h-2.5 overflow-hidden rounded-full bg-secondary">
+            <div className={`h-full rounded-full transition-all ${isLow ? "bg-amber-400" : "bg-emerald-500"}`} style={{ width: `${pct}%` }} />
+          </div>
+          <div className="flex justify-between text-[11px] text-muted-foreground">
+            <span>{pct}% of refill goal</span>
+            <span>Goal {formatCents(target!)}</span>
+          </div>
         </div>
-        <div className="flex justify-between text-[11px] text-muted-foreground">
-          <span>{pct}% remaining</span>
-          <span>Target {formatCents(target)}</span>
-        </div>
-      </div>
-      <DetailBlock>
-        <DetailRow label="Low balance alert">{formatCents(threshold)}</DetailRow>
-        <DetailRow label="Refill target">{formatCents(target)}</DetailRow>
-        <DetailRow label="When low">{billing.prepaid_empty_action === "continue" ? "Auto-reloads" : "Sends alert"}</DetailRow>
-      </DetailBlock>
+      ) : (
+        <button
+          onClick={onAddFunds}
+          className="w-full rounded-lg border border-dashed border-border px-4 py-3 text-left text-xs text-muted-foreground hover:border-foreground/30 hover:text-foreground transition-colors"
+        >
+          No refill goal set — <span className="font-semibold underline underline-offset-2">set one</span> to track your balance health
+        </button>
+      )}
+
+      {(threshold !== null || target !== null) && (
+        <DetailBlock>
+          {threshold !== null && <DetailRow label="Low balance alert">{formatCents(threshold)}</DetailRow>}
+          {target    !== null && <DetailRow label="Refill target">{formatCents(target)}</DetailRow>}
+          <DetailRow label="When low">{billing.prepaid_empty_action === "continue" ? "Auto-reloads" : "Sends alert"}</DetailRow>
+        </DetailBlock>
+      )}
     </div>
   );
 }
 
 function NetTermsBalanceCard({ billing, onPayNow }: { billing: BillingState; onPayNow: () => void }) {
-  const owed = -billing.balance_cents; // balance_cents is negative when owed
+  const owed    = -billing.balance_cents; // balance_cents is negative when owed
+  const hasOwed = owed > 0;
   return (
     <div className="space-y-5">
       <div>
         <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Current tab</p>
-        <p className="mt-1.5 text-[42px] font-extrabold tracking-tight leading-none tabular-nums">{formatCents(owed)}</p>
+        <p className={`mt-1.5 text-[42px] font-extrabold tracking-tight leading-none tabular-nums ${hasOwed ? "text-amber-600" : "text-foreground"}`}>{formatCents(owed)}</p>
         <p className="mt-1.5 text-xs text-muted-foreground">Invoiced on the 1st of each month</p>
       </div>
       <DetailBlock>
@@ -1326,6 +1478,7 @@ function SummaryRow({ label, children }: { label: string; children: React.ReactN
 export default function BillingPage() {
   const [billing, setBilling]   = React.useState<BillingState>(EMPTY_BILLING);
   const [loading, setLoading]   = React.useState(true);
+  const [perf, setPerf]         = React.useState<BillingPerformance | null>(null);
 
   const [prepaidSheet, setPrepaidSheet] = React.useState(false);
   const [paygSheet, setPaygSheet]       = React.useState(false);
@@ -1340,6 +1493,13 @@ export default function BillingPage() {
       .then(data => setBilling(data))
       .catch(() => {})
       .finally(() => setLoading(false));
+  }, []);
+
+  // Load performance data
+  React.useEffect(() => {
+    bondFetch<BillingPerformance>(partnerPath("/billing/performance"))
+      .then(data => setPerf(data))
+      .catch(() => {});
   }, []);
 
   const track      = trackOf(billing.collection_method);
@@ -1433,6 +1593,7 @@ export default function BillingPage() {
         </Card>
 
         <div className="space-y-6 lg:col-span-3">
+          <PerformanceCard perf={perf} />
           <Ledger />
           {track === "payg" && settlement === "net_terms" && <InvoiceHistory />}
         </div>

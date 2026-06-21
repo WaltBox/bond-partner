@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Building2, Tag, Zap, Check, AlertCircle, Loader2, CreditCard, X } from "lucide-react";
+import { Building2, Tag, Zap, Check, AlertCircle, Loader2, CreditCard, X, Camera } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,11 +12,36 @@ import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/page-header";
 import { PartnerAvatar } from "@/components/partner-avatar";
 import { useAuth } from "@/components/auth-context";
+import { usePartner } from "@/components/partner-context";
 import { getSettings, patchOffer, type Offer } from "@/lib/api";
 import { useAsync } from "@/lib/api/use-async";
 import { formatCents } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { bondFetch, partnerPath } from "@/lib/api/client";
+import { bondFetch, partnerPath, getAccessToken } from "@/lib/api/client";
+
+const MAX_LOGO_BYTES = 5 * 1024 * 1024;
+const LOGO_TYPES = ["image/jpeg", "image/png", "image/webp"];
+
+async function uploadLogo(file: File): Promise<string> {
+  const BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "";
+  const token = getAccessToken();
+  const fd = new FormData();
+  fd.append("logo", file);
+  const res = await fetch(`${BASE}/api${partnerPath("/logo")}`, {
+    method: "POST",
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: fd,
+  });
+  const json = (await res.json().catch(() => ({}))) as {
+    data?: { logo_url: string };
+    logo_url?: string;
+    error?: string;
+  };
+  if (!res.ok || json.error) throw new Error(json.error ?? `Upload failed (${res.status})`);
+  const url = json.data?.logo_url ?? json.logo_url;
+  if (!url) throw new Error("Upload succeeded but no logo URL was returned.");
+  return url;
+}
 
 function initials(s: string) {
   return (
@@ -59,15 +84,11 @@ export default function SettingsPage() {
           <Card>
             <CardHeader>
               <CardTitle>Partner profile</CardTitle>
-              <CardDescription>How your business appears in Bond. Read-only in this preview.</CardDescription>
+              <CardDescription>How your business appears in Bond. Your logo shows everywhere diners see you.</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="flex flex-col gap-6 sm:flex-row sm:items-center">
-                <PartnerAvatar
-                  name={data.partner.name}
-                  logoUrl={data.partner.logoUrl}
-                  className="size-20 rounded-2xl text-2xl"
-                />
+                <LogoUpload name={data.partner.name} logoUrl={data.partner.logoUrl} />
                 <div className="grid flex-1 gap-4 sm:grid-cols-2">
                   <Field icon={Building2} label="Business name" value={data.partner.name ?? "—"} />
                   <Field icon={Tag} label="Category" value={data.partner.category ?? "—"} />
@@ -136,6 +157,81 @@ export default function SettingsPage() {
             </CardContent>
           </Card>
         </div>
+      )}
+    </div>
+  );
+}
+
+function LogoUpload({ name, logoUrl }: { name?: string | null; logoUrl?: string | null }) {
+  const { refresh } = usePartner();
+  const inputRef = React.useRef<HTMLInputElement>(null);
+  const [preview, setPreview] = React.useState<string | null>(logoUrl ?? null);
+  const [uploading, setUploading] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+
+  async function handleFile(file: File) {
+    setError(null);
+    if (!LOGO_TYPES.includes(file.type)) {
+      setError("Use a JPEG, PNG, or WebP image.");
+      return;
+    }
+    if (file.size > MAX_LOGO_BYTES) {
+      setError("Image must be under 5MB.");
+      return;
+    }
+    setUploading(true);
+    try {
+      const url = await uploadLogo(file);
+      setPreview(url);
+      refresh(); // propagate the new logo everywhere (sidebar, moments, previews)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Upload failed.");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-col items-center gap-2">
+      <button
+        type="button"
+        onClick={() => inputRef.current?.click()}
+        disabled={uploading}
+        aria-label="Upload logo"
+        className="group relative size-20 shrink-0 overflow-hidden rounded-2xl border border-border/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <PartnerAvatar name={name} logoUrl={preview} className="size-20 rounded-2xl text-2xl" />
+        <span
+          className={cn(
+            "absolute inset-0 flex flex-col items-center justify-center gap-1 bg-black/55 text-white transition-opacity",
+            uploading ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+          )}
+        >
+          {uploading ? (
+            <Loader2 className="size-5 animate-spin" />
+          ) : (
+            <>
+              <Camera className="size-5" />
+              <span className="text-[10px] font-medium">Change</span>
+            </>
+          )}
+        </span>
+      </button>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) handleFile(file);
+          e.target.value = "";
+        }}
+      />
+      {error ? (
+        <p className="max-w-[8rem] text-center text-[11px] text-destructive">{error}</p>
+      ) : (
+        <p className="text-[11px] text-muted-foreground">JPEG/PNG/WebP, max 5MB</p>
       )}
     </div>
   );

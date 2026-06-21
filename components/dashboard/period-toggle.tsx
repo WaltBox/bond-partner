@@ -18,7 +18,7 @@ export function PeriodToggle({
   onChange: (p: Period) => void;
 }) {
   return (
-    <div className="inline-flex items-center rounded-lg border border-border bg-secondary/50 p-0.5">
+    <div className="inline-flex items-center rounded-full border-[2px] border-[#1a1a1a] bg-white/70 p-0.5">
       {OPTIONS.map((opt) => (
         <button
           key={opt.value}
@@ -26,10 +26,10 @@ export function PeriodToggle({
           onClick={() => onChange(opt.value)}
           aria-pressed={value === opt.value}
           className={cn(
-            "rounded-md px-2 py-1 text-xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            "rounded-full px-2.5 py-0.5 text-xs font-bold transition-colors focus:outline-none",
             value === opt.value
-              ? "bg-card text-foreground shadow-sm"
-              : "text-muted-foreground hover:text-foreground"
+              ? "bg-[#1a1a1a] text-white"
+              : "text-[#1a1a1a]/60 hover:text-[#1a1a1a]"
           )}
         >
           {opt.label}
