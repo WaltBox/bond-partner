@@ -551,6 +551,17 @@ function FundingProjection({ amountCents }: { amountCents: number }) {
       <div className="h-3 w-52 rounded bg-muted" />
     </div>
   );
+  // Backend returned a response but no projection (e.g. amount too small, or no
+  // approved promotion yet). Surface the reason instead of hiding silently.
+  if (data && !data.projection) {
+    if (!data.reason) return null;
+    return (
+      <div className="rounded-xl border-[2px] border-dashed border-border bg-card p-4 shadow-[3px_3px_0_0_rgba(0,0,0,0.04)]">
+        <p className="text-[11px] font-black uppercase tracking-widest text-muted-foreground">Projection</p>
+        <p className="mt-1.5 text-xs leading-snug text-muted-foreground">{data.reason}</p>
+      </div>
+    );
+  }
   if (!data?.projection) return null;
 
   const { projection, promotion, avg_group_size, group_size_source } = data;
