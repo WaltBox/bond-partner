@@ -569,6 +569,10 @@ function FundingProjection({ amountCents }: { amountCents: number }) {
   if (!data?.projection) return null;
 
   const { projection, promotion, avg_group_size, group_size_source } = data;
+  // Reconcile to the round amount the partner is loading (same as the simulator),
+  // so the figures match instead of drifting to the realized whole-redemption cashback.
+  const netKeep = projection.guaranteed_sales_cents - amountCents;
+  const profit  = netKeep - projection.food_cost_cents;
 
   return (
     <div className={`rounded-xl border-[2px] border-[#1a1a1a] bg-card p-4 space-y-3 shadow-[3px_3px_0_0_#1a1a1a] transition-opacity ${loading ? "opacity-60" : ""}`}>
@@ -587,23 +591,26 @@ function FundingProjection({ amountCents }: { amountCents: number }) {
         <div>
           <div className="flex justify-between">
             <span className="text-muted-foreground">Cashback to customers</span>
-            <span className="font-semibold tabular-nums">− {fmtFloor(projection.cashback_cents)}</span>
+            <span className="font-semibold tabular-nums">− {fmtFloor(amountCents)}</span>
           </div>
           <p className="text-[11px] text-muted-foreground">↳ they fund this by spending first</p>
         </div>
         <div className="h-px bg-border/60" />
         <div className="flex justify-between">
           <span className="text-muted-foreground">Sales you keep</span>
-          <span className="font-semibold tabular-nums">{fmtFloor(projection.net_sales_cents)}</span>
+          <span className="font-semibold tabular-nums">{fmtFloor(netKeep)}</span>
         </div>
-        <div className="flex justify-between">
-          <span className="text-muted-foreground">Cost to make food</span>
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-1.5">
+            <span className="text-muted-foreground">Cost to make food</span>
+            <span className="rounded-full bg-secondary px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-muted-foreground">your investment</span>
+          </div>
           <span className="font-semibold tabular-nums">− {fmtFloor(projection.food_cost_cents)}</span>
         </div>
         <div className="h-px bg-border/60" />
         <div className="flex items-baseline justify-between">
           <span className="text-[11px] font-black uppercase tracking-widest text-muted-foreground">Your profit</span>
-          <span className="text-base font-black tabular-nums">{fmtFloor(projection.profit_cents)}</span>
+          <span className="text-base font-black tabular-nums">{fmtFloor(profit)}</span>
         </div>
       </div>
 
