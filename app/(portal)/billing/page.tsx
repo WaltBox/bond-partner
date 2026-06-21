@@ -511,7 +511,9 @@ interface FundingProjectionData {
     redemptions_funded:     number;
     people_per_reward:      number;
     guaranteed_sales_cents: number;
+    net_sales_cents:        number;
     cashback_cents:         number;
+    investment_cents:       number;
     food_cost_cents:        number;
     profit_cents:           number;
   } | null;
@@ -579,20 +581,28 @@ function FundingProjection({ amountCents }: { amountCents: number }) {
 
       <div className="space-y-1.5 text-sm">
         <div className="flex justify-between">
-          <span className="text-muted-foreground">Sales generated</span>
+          <span className="text-muted-foreground">Total sales rung up</span>
           <span className="font-semibold tabular-nums">{fmtFloor(projection.guaranteed_sales_cents)}</span>
         </div>
+        <div>
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Cashback to customers</span>
+            <span className="font-semibold tabular-nums">− {fmtFloor(projection.cashback_cents)}</span>
+          </div>
+          <p className="text-[11px] text-muted-foreground">↳ they fund this by spending first</p>
+        </div>
+        <div className="h-px bg-border/60" />
         <div className="flex justify-between">
-          <span className="text-muted-foreground">Your invoice</span>
-          <span className="font-semibold tabular-nums">− {fmtFloor(projection.cashback_cents)}</span>
+          <span className="text-muted-foreground">Sales you keep</span>
+          <span className="font-semibold tabular-nums">{fmtFloor(projection.net_sales_cents)}</span>
         </div>
         <div className="flex justify-between">
           <span className="text-muted-foreground">Cost to make food</span>
           <span className="font-semibold tabular-nums">− {fmtFloor(projection.food_cost_cents)}</span>
         </div>
         <div className="h-px bg-border/60" />
-        <div className="flex justify-between">
-          <span className="text-[11px] font-black uppercase tracking-widest text-muted-foreground">You profit</span>
+        <div className="flex items-baseline justify-between">
+          <span className="text-[11px] font-black uppercase tracking-widest text-muted-foreground">Your profit</span>
           <span className="text-base font-black tabular-nums">{fmtFloor(projection.profit_cents)}</span>
         </div>
       </div>
@@ -653,7 +663,13 @@ function InvoiceSimulatorSheet({
   }, [amount, open]);
 
   const p     = data?.projection ?? null;
-  const lossy = !!p && p.profit_cents < 0;
+  // Reconcile the breakdown to the round invoice the partner picked (the slider
+  // amount), not the backend's whole-redemption-rounded cashback — so $1,000
+  // reads as $1,000 everywhere instead of dropping to $996.
+  const netKeep = p ? p.guaranteed_sales_cents - amount : 0;
+  const profit  = p ? netKeep - p.food_cost_cents : 0;
+  const lossy   = !!p && profit < 0;
+  const roiMultiple = p && p.investment_cents > 0 ? Math.round(profit / p.investment_cents) : null;
   const pctOf = (c: number) => `${Math.round(((c - SIM_MIN) / (SIM_MAX - SIM_MIN)) * 100)}%`;
   const tabInRange = currentTabCents > SIM_MIN && currentTabCents < SIM_MAX;
   const noPromo = !loading && data && !data.projection;
@@ -725,26 +741,45 @@ function InvoiceSimulatorSheet({
           </div>
         </div>
 
-        {/* Breakdown */}
+        {/* Transparent breakdown — reconciles: gross − cashback = net, net − food = profit */}
         {p && (
-          <div className={`space-y-1.5 rounded-xl border-[2px] border-[#1a1a1a] bg-card p-4 text-sm shadow-[3px_3px_0_0_#1a1a1a] transition-opacity ${loading ? "opacity-60" : ""}`}>
+          <div className={`space-y-2 rounded-xl border-[2px] border-[#1a1a1a] bg-card p-4 text-sm shadow-[3px_3px_0_0_#1a1a1a] transition-opacity ${loading ? "opacity-60" : ""}`}>
             <p className="text-xs text-muted-foreground">~{p.redemptions_funded} redemptions</p>
+
             <div className="flex justify-between">
-              <span className="text-muted-foreground">Sales generated</span>
+              <span className="text-muted-foreground">Total sales rung up</span>
               <span className="font-semibold tabular-nums">{fmtFloor(p.guaranteed_sales_cents)}</span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Your invoice</span>
-              <span className="font-semibold tabular-nums">− {fmtFloor(p.cashback_cents)}</span>
+            <div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Cashback to customers</span>
+                <span className="font-semibold tabular-nums">− {fmtFloor(amount)}</span>
+              </div>
+              <p className="text-[11px] text-muted-foreground">↳ they fund this by spending first</p>
             </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Cost to make food</span>
-              <span className="font-semibold tabular-nums">− {fmtFloor(p.food_cost_cents)}</span>
-            </div>
+
             <div className="h-px bg-border/60" />
             <div className="flex justify-between">
-              <span className="text-[11px] font-black uppercase tracking-widest text-muted-foreground">You profit</span>
-              <span className={`text-base font-black tabular-nums ${lossy ? "text-destructive" : ""}`}>{fmtFloor(p.profit_cents)}</span>
+              <span className="text-muted-foreground">Sales you keep</span>
+              <span className="font-semibold tabular-nums">{fmtFloor(netKeep)}</span>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-1.5">
+                <span className="text-muted-foreground">Cost to make food</span>
+                <span className="rounded-full bg-secondary px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-muted-foreground">your investment</span>
+              </div>
+              <span className="font-semibold tabular-nums">− {fmtFloor(p.food_cost_cents)}</span>
+            </div>
+
+            <div className="h-px bg-border/60" />
+            <div className="flex items-baseline justify-between">
+              <span className="text-[11px] font-black uppercase tracking-widest text-muted-foreground">Profit</span>
+              <div className="flex items-baseline gap-2">
+                <span className={`text-base font-black tabular-nums ${lossy ? "text-destructive" : ""}`}>{fmtFloor(profit)}</span>
+                {!lossy && roiMultiple != null && (
+                  <span className="rounded-md bg-success/10 px-1.5 py-0.5 text-[11px] font-black text-success">~{roiMultiple}X</span>
+                )}
+              </div>
             </div>
           </div>
         )}
@@ -758,9 +793,8 @@ function InvoiceSimulatorSheet({
           ) : (
             <div className="rounded-xl border-[2px] border-[#1a1a1a] bg-[#FFF5E8] px-3.5 py-2.5">
               <p className="text-xs leading-snug text-[#1a1a1a]">
-                💡 A {fmtFloor(amount)} invoice means ~{p.redemptions_funded} tables and{" "}
-                <span className="font-bold">{fmtFloor(p.profit_cents)} in profit</span> — a bigger invoice just means the
-                program drove more traffic.
+                💡 A {fmtFloor(amount)} invoice drives <span className="font-bold">{fmtFloor(p.guaranteed_sales_cents)} in sales</span> —
+                you keep {fmtFloor(netKeep)} and profit {fmtFloor(profit)}.
               </p>
             </div>
           )
@@ -768,7 +802,7 @@ function InvoiceSimulatorSheet({
 
         {data?.group_size_source === "default" && (
           <p className="text-[11px] text-muted-foreground leading-snug">
-            Conservative estimate until you have redemption data — real numbers will likely be higher.
+            Conservative estimate until you have redemption data — real numbers likely higher. Assumes new customers the promo brings in.
           </p>
         )}
         </>)}

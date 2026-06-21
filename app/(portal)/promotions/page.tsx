@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { Sparkles, Send, Check, Loader2, Info, CheckCircle2, Clock, XCircle, CircleDot, Megaphone, ArrowRight, ChevronDown } from "lucide-react";
+import { Sparkles, Send, Check, Loader2, Info, CheckCircle2, Clock, XCircle, CircleDot, Megaphone, ArrowRight } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -309,7 +309,9 @@ interface RoiRequest {
 
 interface RoiResult {
   guaranteed_sales_cents:  number;
+  net_sales_cents:         number;
   cashback_cents:          number;
+  investment_cents:        number;
   food_cost_cents:         number;
   profit_cents:            number;
   redemptions_funded:      number;
@@ -319,10 +321,6 @@ interface RoiResult {
 }
 
 // ─── ROI Panel ────────────────────────────────────────────────────────────────
-
-function fmtCents(cents: number) {
-  return `$${(cents / 100).toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
-}
 
 function fmtWhole(cents: number) {
   return `$${Math.round(cents / 100).toLocaleString("en-US")}`;
@@ -348,7 +346,6 @@ function ROIPanel({
   const [result, setResult]           = React.useState<RoiResult | null>(null);
   const [fetching, setFetching]       = React.useState(false);
   const [zeroBudget, setZeroBudget]   = React.useState(false);
-  const [showMath, setShowMath]       = React.useState(false);
   const timerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function buildPayload(): RoiRequest | null {
@@ -406,10 +403,18 @@ function ROIPanel({
     return () => { if (timerRef.current) clearTimeout(timerRef.current); };
   }, [budgetInput, pricing, form]);
 
+  // Reconcile the breakdown to the round invoice the partner typed (the budget),
+  // not the backend's whole-redemption-rounded cashback — so the numbers match
+  // the figure they entered instead of drifting a few dollars.
   const budgetCents     = parseDollars(budgetInput);
-  const profitPct       = result && budgetCents ? Math.round((result.profit_cents / budgetCents) * 100) : null;
-  const perRedemption   = result && result.redemptions_funded ? result.cashback_cents / result.redemptions_funded : 0;
-  const lossy           = !!result && result.profit_cents < 0;
+  const netKeep         = result ? result.guaranteed_sales_cents - budgetCents : 0;
+  const profit          = result ? netKeep - result.food_cost_cents : 0;
+  const lossy           = !!result && profit < 0;
+  const noInvestment    = !!result && result.investment_cents <= 0;
+  // Textbook ROI — return on the money actually out of pocket (the comps).
+  const roiMultiple     = result && result.investment_cents > 0
+    ? Math.round(profit / result.investment_cents)
+    : null;
 
   function MathRow({ label, value, sign }: { label: string; value: string; sign?: "+" | "−" | "=" }) {
     return (
@@ -426,13 +431,13 @@ function ROIPanel({
     <Card>
       <CardHeader className="pb-3">
         <CardTitle className="text-xs font-black uppercase tracking-widest text-muted-foreground">
-          Your guaranteed return
+          Your return
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         {/* Budget input */}
         <div className="space-y-1.5">
-          <Label className="text-xs text-muted-foreground">Put in</Label>
+          <Label className="text-xs text-muted-foreground">Invoice you&apos;ll run</Label>
           <div className="relative">
             <span className="pointer-events-none absolute left-2.5 top-1.5 text-sm text-muted-foreground">$</span>
             <Input
@@ -454,74 +459,61 @@ function ROIPanel({
           <p className="text-xs text-amber-600 font-medium">Increase your budget to fund at least one reward.</p>
         ) : (
           <>
-            {/* Hero: profit */}
-            <div className={`space-y-0.5 ${fetching ? "opacity-40 transition-opacity" : "transition-opacity"}`}>
-              <p className="text-[11px] font-black uppercase tracking-widest text-muted-foreground">
-                {lossy ? "Loses money" : "Profit"}
-              </p>
-              <p className={`text-3xl font-black tabular-nums tracking-tight ${lossy ? "text-destructive" : ""}`}>
-                {result ? fmtWhole(result.profit_cents) : "—"}
-              </p>
-              {result && budgetCents > 0 && (
-                <p className="text-xs text-muted-foreground">
-                  on {fmtWhole(budgetCents)} in
-                  {profitPct != null && (
-                    <span className={`ml-1.5 font-bold ${lossy ? "text-destructive" : "text-success"}`}>
-                      {profitPct >= 0 ? "+" : ""}{profitPct}%
-                    </span>
-                  )}
-                </p>
-              )}
-            </div>
+            {!result ? (
+              <p className="text-xs text-muted-foreground/60">Add menu price + cost-to-make to see your numbers.</p>
+            ) : (
+              <div className={`space-y-2 ${fetching ? "opacity-40 transition-opacity" : "transition-opacity"}`}>
+                <p className="text-xs text-muted-foreground">~{result.redemptions_funded} redemptions</p>
 
-            {lossy && (
-              <p className="text-[11px] text-destructive leading-snug">
-                This promo loses money as structured. Try a lower-cost reward or a higher required spend.
-              </p>
-            )}
+                <MathRow label="Total sales rung up" value={fmtWhole(result.guaranteed_sales_cents)} />
+                <div>
+                  <MathRow label="Cashback back to customers" value={fmtWhole(budgetCents)} sign="−" />
+                  <p className="text-[11px] text-muted-foreground">↳ they fund this by spending first</p>
+                </div>
 
-            {result && (
-              <>
                 <div className="h-px bg-border/60" />
+                <MathRow label="Sales you keep" value={fmtWhole(netKeep)} />
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-sm text-muted-foreground">Cost to make the food</p>
+                    <span className="rounded-full bg-secondary px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-muted-foreground">your investment</span>
+                  </div>
+                  <span className="text-sm font-semibold tabular-nums">− {fmtWhole(result.food_cost_cents)}</span>
+                </div>
 
-                <button
-                  onClick={() => setShowMath(s => !s)}
-                  className="flex items-center gap-1 text-xs font-bold text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  See the math
-                  <ChevronDown className={`size-3.5 transition-transform ${showMath ? "rotate-180" : ""}`} />
-                </button>
-
-                {showMath && (
-                  <div className="space-y-2.5 rounded-xl border border-border/60 bg-secondary/30 p-3.5 animate-fade-in">
-                    {perRedemption > 0 && (
-                      <p className="text-xs text-muted-foreground">
-                        {fmtWhole(budgetCents)} ÷ {fmtCents(perRedemption)} cashback ={" "}
-                        <span className="font-semibold text-foreground">{result.redemptions_funded} redemptions</span>
-                      </p>
-                    )}
-                    <div className="space-y-1.5">
-                      <MathRow label="Guaranteed sales"   value={fmtWhole(result.guaranteed_sales_cents)} sign="+" />
-                      <MathRow label="Cashback you fund"  value={fmtWhole(result.cashback_cents)}         sign="−" />
-                      <MathRow label="Cost to make food"  value={fmtWhole(result.food_cost_cents)}        sign="−" />
-                      <div className="h-px bg-border/60" />
-                      <MathRow label="Profit"             value={fmtWhole(result.profit_cents)}           sign="=" />
-                    </div>
-                    {!lossy && (
-                      <p className="text-[11px] text-muted-foreground leading-snug pt-1">
-                        ↳ Your {fmtWhole(budgetCents)} comes back through the sales it drives — you keep{" "}
-                        {fmtWhole(result.profit_cents)} on top.
-                      </p>
+                <div className="h-px bg-border/60" />
+                <div className="flex items-baseline justify-between gap-3 pt-0.5">
+                  <p className="text-[11px] font-black uppercase tracking-widest text-muted-foreground">Your profit</p>
+                  <div className="flex items-baseline gap-2">
+                    <span className={`text-2xl font-black tabular-nums tracking-tight ${lossy ? "text-destructive" : ""}`}>
+                      {fmtWhole(profit)}
+                    </span>
+                    {!lossy && roiMultiple != null && (
+                      <span className="rounded-md bg-success/10 px-1.5 py-0.5 text-xs font-black text-success">~{roiMultiple}X</span>
                     )}
                   </div>
+                </div>
+
+                {lossy ? (
+                  <p className="text-[11px] text-destructive leading-snug">
+                    This promo loses money as structured. Try a lower-cost reward or a higher required spend.
+                  </p>
+                ) : noInvestment ? (
+                  <p className="text-[11px] text-amber-600 leading-snug">
+                    Add cost-to-make on the reward to see your real cost &amp; ROI.
+                  </p>
+                ) : roiMultiple != null && (
+                  <p className="text-[11px] text-muted-foreground leading-snug">
+                    Your real cost: {fmtWhole(result.investment_cents)} in comps · ~{roiMultiple}X ROI
+                  </p>
                 )}
 
-                <p className="text-xs text-muted-foreground leading-snug">
+                <p className="text-xs text-muted-foreground leading-snug pt-1">
                   {result.group_size_source === "history"
-                    ? `That's the floor — based on your average table of ${result.avg_group_size}. It only goes up as guests order more.`
-                    : "That's the floor using a conservative estimate — your real numbers will likely be higher once you have redemption data."}
+                    ? `Based on your average table of ${result.avg_group_size}. Assumes new customers the promo brings in.`
+                    : "Conservative estimate until you have redemption data — real numbers likely higher. Assumes new customers the promo brings in."}
                 </p>
-              </>
+              </div>
             )}
 
             <div className="h-px bg-border/60" />
