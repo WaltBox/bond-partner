@@ -14,7 +14,7 @@ import { bondFetch, partnerPath } from "@/lib/api/client";
 
 type MatchType  = "keyword" | "exact";
 type Basis      = "per_head" | "per_table" | "per_n_heads";
-type RewardKind = "free_item" | "percent_off_item" | "percent_back";
+type RewardKind = "free_item" | "percent_off_item" | "fixed_off_item" | "percent_back";
 
 interface Requirement {
   name:        string;
@@ -25,13 +25,14 @@ interface Requirement {
 }
 
 interface Reward {
-  name:        string;
-  kind:        RewardKind;
-  match_type:  MatchType;
-  match_value: string;
-  basis:       Basis;
-  n?:          number;
-  percent?:    number;
+  name:            string;
+  kind:            RewardKind;
+  match_type:      MatchType;
+  match_value:     string;
+  basis:           Basis;
+  n?:              number;
+  percent?:        number;
+  fixed_off_cents?: number;
 }
 
 interface PricingItem {
@@ -294,6 +295,9 @@ interface RoiRequest {
   budget_cents:                number;
   reward_menu_price_cents:     number;
   reward_cogs_cents:           number;
+  reward_kind:                 RewardKind;
+  reward_percent:              number | null;
+  reward_fixed_cents:          number | null;
   reward_basis:                Basis;
   reward_n:                    number | null;
   required_menu_prices_cents:  number[];
@@ -347,10 +351,14 @@ function ROIPanel({
 
     if (!budgetCents || !rewardMenuPrice || reqPrices.length === 0) return null;
 
+    const kind = form.reward.kind;
     return {
       budget_cents:               budgetCents,
       reward_menu_price_cents:    rewardMenuPrice,
       reward_cogs_cents:          rewardItem ? parseDollars(pricing[rewardItem.label]?.cogs ?? "") : 0,
+      reward_kind:                kind,
+      reward_percent:             (kind === "percent_off_item" || kind === "percent_back") ? (form.reward.percent ?? null) : null,
+      reward_fixed_cents:         kind === "fixed_off_item" ? (form.reward.fixed_off_cents ?? null) : null,
       reward_basis:               form.reward.basis,
       reward_n:                   form.reward.basis === "per_n_heads" ? (form.reward.n ?? null) : null,
       required_menu_prices_cents: reqPrices,
@@ -471,11 +479,14 @@ function PricingForm({
   form,
   pricing,
   onChange,
+  onRewardChange,
 }: {
   form: ParsedForm;
   pricing: Record<string, { menu_price: string; cogs: string }>;
   onChange: (label: string, v: { menu_price: string; cogs: string }) => void;
+  onRewardChange: (patch: Partial<Reward>) => void;
 }) {
+  const kind = form.reward.kind;
   return (
     <div className="space-y-4 animate-fade-in">
       {form.inferred_basis_note && (
@@ -489,9 +500,60 @@ function PricingForm({
       </p>
       {form.pricing_items.map(item => {
         const vals = pricing[item.label] ?? { menu_price: "", cogs: "" };
+        const isReward = item.role === "reward";
         return (
           <div key={item.label} className="space-y-3 rounded-xl border border-border/60 bg-card p-4">
             <p className="text-sm font-semibold">{item.label}</p>
+
+            {/* Reward amount — what Bond pays back, varies by reward kind */}
+            {isReward && (kind === "percent_off_item" || kind === "percent_back") && (
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">
+                  {kind === "percent_back" ? "Percent back" : "Percent off"}
+                </Label>
+                <div className="relative w-28">
+                  <Input
+                    className="h-8 pr-7 text-sm"
+                    type="number"
+                    min={1}
+                    max={100}
+                    step={1}
+                    placeholder="50"
+                    value={form.reward.percent ?? ""}
+                    onChange={e => {
+                      const n = parseInt(e.target.value, 10);
+                      onRewardChange({ percent: isNaN(n) ? undefined : Math.min(100, Math.max(1, n)) });
+                    }}
+                  />
+                  <span className="pointer-events-none absolute right-2.5 top-1.5 text-sm text-muted-foreground">%</span>
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  {kind === "percent_back" ? "Of the whole bill" : "Of the item's menu price"}
+                </p>
+              </div>
+            )}
+            {isReward && kind === "fixed_off_item" && (
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Cashback amount</Label>
+                <div className="relative w-28">
+                  <span className="pointer-events-none absolute left-2.5 top-1.5 text-sm text-muted-foreground">$</span>
+                  <Input
+                    className="h-8 pl-6 text-sm"
+                    type="number"
+                    min={0}
+                    step={0.01}
+                    placeholder="0.00"
+                    value={form.reward.fixed_off_cents != null ? (form.reward.fixed_off_cents / 100).toString() : ""}
+                    onChange={e => {
+                      const v = e.target.value.trim();
+                      onRewardChange({ fixed_off_cents: v === "" ? undefined : parseDollars(v) });
+                    }}
+                  />
+                </div>
+                <p className="text-[11px] text-muted-foreground">Flat $ back per item (capped at menu price)</p>
+              </div>
+            )}
+
             <div className="grid grid-cols-2 gap-3">
               {item.needs_menu_price && (
                 <div className="space-y-1.5">
@@ -922,6 +984,7 @@ export default function PromotionsPage() {
                   form={currentForm}
                   pricing={pricing}
                   onChange={(label, v) => setPricing(p => ({ ...p, [label]: v }))}
+                  onRewardChange={patch => setCurrentForm(f => f ? { ...f, reward: { ...f.reward, ...patch } } : f)}
                 />
               )}
 
