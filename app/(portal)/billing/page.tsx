@@ -600,11 +600,8 @@ function FundingProjection({ amountCents }: { amountCents: number }) {
           <span className="text-muted-foreground">Sales you keep</span>
           <span className="font-semibold tabular-nums">{fmtFloor(netKeep)}</span>
         </div>
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-1.5">
-            <span className="text-muted-foreground">Cost to make food</span>
-            <span className="rounded-full bg-secondary px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-muted-foreground">your investment</span>
-          </div>
+        <div className="flex justify-between">
+          <span className="text-muted-foreground">Cost to make food</span>
           <span className="font-semibold tabular-nums">− {fmtFloor(projection.food_cost_cents)}</span>
         </div>
         <div className="h-px bg-border/60" />
@@ -612,6 +609,9 @@ function FundingProjection({ amountCents }: { amountCents: number }) {
           <span className="text-[11px] font-black uppercase tracking-widest text-muted-foreground">Your profit</span>
           <span className="text-base font-black tabular-nums">{fmtFloor(profit)}</span>
         </div>
+        {projection.investment_cents > 0 && (
+          <p className="text-[11px] text-muted-foreground">Your real investment: {fmtFloor(projection.investment_cents)} in comps</p>
+        )}
       </div>
 
       <p className="text-[11px] text-muted-foreground leading-snug">
@@ -770,11 +770,8 @@ function InvoiceSimulatorSheet({
               <span className="text-muted-foreground">Sales you keep</span>
               <span className="font-semibold tabular-nums">{fmtFloor(netKeep)}</span>
             </div>
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-1.5">
-                <span className="text-muted-foreground">Cost to make food</span>
-                <span className="rounded-full bg-secondary px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-muted-foreground">your investment</span>
-              </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Cost to make food</span>
               <span className="font-semibold tabular-nums">− {fmtFloor(p.food_cost_cents)}</span>
             </div>
 
@@ -788,6 +785,9 @@ function InvoiceSimulatorSheet({
                 )}
               </div>
             </div>
+            {!lossy && p.investment_cents > 0 && (
+              <p className="text-[11px] text-muted-foreground">Your real investment: {fmtFloor(p.investment_cents)} in comps</p>
+            )}
           </div>
         )}
 

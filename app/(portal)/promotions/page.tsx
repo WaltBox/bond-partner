@@ -472,14 +472,8 @@ function ROIPanel({
                 </div>
 
                 <div className="h-px bg-border/60" />
-                <MathRow label="Sales you keep" value={fmtWhole(netKeep)} />
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-1.5">
-                    <p className="text-sm text-muted-foreground">Cost to make the food</p>
-                    <span className="rounded-full bg-secondary px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-muted-foreground">your investment</span>
-                  </div>
-                  <span className="text-sm font-semibold tabular-nums">− {fmtWhole(result.food_cost_cents)}</span>
-                </div>
+                <MathRow label="Sales you keep"        value={fmtWhole(netKeep)} />
+                <MathRow label="Cost to make the food" value={fmtWhole(result.food_cost_cents)} sign="−" />
 
                 <div className="h-px bg-border/60" />
                 <div className="flex items-baseline justify-between gap-3 pt-0.5">
