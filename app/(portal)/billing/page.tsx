@@ -613,13 +613,30 @@ const SIM_MAX  = 200000;  // $2,000
 const SIM_STEP = 1000;    // $10
 const SIM_PRESETS = [25000, 50000, 100000, 200000];
 
-function InvoiceSimulator({ currentTabCents }: { currentTabCents: number }) {
+/** Trigger that opens the simulator sheet — matches the page's button style. */
+function InvoiceSimulatorCard({ onOpen }: { onOpen: () => void }) {
+  return (
+    <Button variant="outline" className="h-11 gap-2 px-5 text-sm" onClick={onOpen}>
+      <span className="text-base leading-none">🔮</span>
+      Predict your profit
+    </Button>
+  );
+}
+
+function InvoiceSimulatorSheet({
+  open, onClose, currentTabCents,
+}: {
+  open: boolean;
+  onClose: () => void;
+  currentTabCents: number;
+}) {
   const [amount, setAmount]   = React.useState(25000);
   const [data, setData]       = React.useState<FundingProjectionData | null>(null);
   const [loading, setLoading] = React.useState(true);
   const timerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   React.useEffect(() => {
+    if (!open) return;
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = setTimeout(async () => {
       setLoading(true);
@@ -633,39 +650,35 @@ function InvoiceSimulator({ currentTabCents }: { currentTabCents: number }) {
       finally { setLoading(false); }
     }, 250);
     return () => { if (timerRef.current) clearTimeout(timerRef.current); };
-  }, [amount]);
-
-  // No active/ projectable promo → don't show the simulator.
-  if (!loading && data && !data.projection) {
-    return (
-      <Card>
-        <CardHeader className="pb-3"><CardTitle className="text-base">Predict your invoice</CardTitle></CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground">Build an active promotion to predict your invoice.</p>
-        </CardContent>
-      </Card>
-    );
-  }
+  }, [amount, open]);
 
   const p     = data?.projection ?? null;
   const lossy = !!p && p.profit_cents < 0;
   const pctOf = (c: number) => `${Math.round(((c - SIM_MIN) / (SIM_MAX - SIM_MIN)) * 100)}%`;
   const tabInRange = currentTabCents > SIM_MIN && currentTabCents < SIM_MAX;
+  const noPromo = !loading && data && !data.projection;
 
   return (
-    <Card>
-      <CardHeader className="pb-3">
-        <div className="flex items-center gap-2">
-          <span className="flex size-7 items-center justify-center rounded-full border-[2px] border-[#1a1a1a] bg-[#5DD96E] text-[#1a1a1a]">
-            <TrendingUp className="size-4" />
-          </span>
-          <CardTitle className="text-base">Predict your invoice</CardTitle>
-        </div>
-        {data?.promotion && (
-          <p className="text-xs text-muted-foreground">Based on &ldquo;{data.promotion.name}&rdquo;</p>
-        )}
-      </CardHeader>
-      <CardContent className="space-y-5">
+    <Sheet open={open} onOpenChange={v => !v && onClose()}>
+      <SheetContent side="right" className="w-full sm:max-w-md flex flex-col gap-0 p-0">
+        <SheetHeader className="px-6 pt-6 pb-4 border-b border-border/60">
+          <div className="flex items-center gap-3">
+            <div className="flex size-9 items-center justify-center rounded-xl border-[2px] border-[#1a1a1a] bg-[#5DD96E]">
+              <TrendingUp className="size-4 text-[#1a1a1a]" />
+            </div>
+            <div>
+              <SheetTitle>Predict your profit 🔮</SheetTitle>
+              <SheetDescription className="text-xs">
+                {data?.promotion ? `Based on "${data.promotion.name}"` : "Drag the invoice up and watch your profit climb."}
+              </SheetDescription>
+            </div>
+          </div>
+        </SheetHeader>
+
+        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+        {noPromo ? (
+          <p className="text-sm text-muted-foreground">Build an active promotion to predict your invoice.</p>
+        ) : (<>
         {/* Amount + slider */}
         <div className="space-y-3">
           <div className="flex items-baseline justify-between">
@@ -758,8 +771,10 @@ function InvoiceSimulator({ currentTabCents }: { currentTabCents: number }) {
             Conservative estimate until you have redemption data — real numbers will likely be higher.
           </p>
         )}
-      </CardContent>
-    </Card>
+        </>)}
+        </div>
+      </SheetContent>
+    </Sheet>
   );
 }
 
@@ -1658,6 +1673,7 @@ export default function BillingPage() {
   const [paygSheet, setPaygSheet]       = React.useState(false);
   const [addFundsSheet, setAddFunds]    = React.useState(false);
   const [payTabSheet, setPayTab]        = React.useState(false);
+  const [simSheet, setSimSheet]         = React.useState(false);
 
   const [toast, setToast] = React.useState<{ msg: string; type?: "success" | "info" | "error" } | null>(null);
 
@@ -1767,7 +1783,7 @@ export default function BillingPage() {
         </Card>
 
         <div className="space-y-6 lg:col-span-3">
-          {track === "payg" && <InvoiceSimulator currentTabCents={-billing.balance_cents} />}
+          {track === "payg" && <InvoiceSimulatorCard onOpen={() => setSimSheet(true)} />}
           <PerformanceCard perf={perf} />
           <Ledger />
           {track === "payg" && settlement === "net_terms" && <InvoiceHistory />}
@@ -1807,6 +1823,12 @@ export default function BillingPage() {
           setBilling(b => ({ ...b, balance_cents: -remaining }));
           setToast({ msg: `${formatCents(paid)} payment submitted.` });
         }}
+      />
+
+      <InvoiceSimulatorSheet
+        open={simSheet}
+        onClose={() => setSimSheet(false)}
+        currentTabCents={-billing.balance_cents}
       />
 
       {toast && <Toast message={toast.msg} type={toast.type} onDone={() => setToast(null)} />}
