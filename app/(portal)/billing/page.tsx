@@ -785,9 +785,25 @@ function InvoiceSimulatorSheet({
                 )}
               </div>
             </div>
-            {!lossy && p.investment_cents > 0 && (
-              <p className="text-[11px] text-muted-foreground">Your real investment: {fmtFloor(p.investment_cents)} in comps</p>
-            )}
+          </div>
+        )}
+
+        {/* Investment → profit hero — make the real $ in / $ out / multiple obvious */}
+        {p && !lossy && p.investment_cents > 0 && roiMultiple != null && (
+          <div className="rounded-xl border-[2px] border-[#1a1a1a] bg-[#E8FBEA] px-4 py-3 shadow-[3px_3px_0_0_#1a1a1a]">
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-[#1a1a1a]/55">You put in</p>
+                <p className="font-display text-xl font-extrabold leading-none tabular-nums text-[#1a1a1a]">{fmtFloor(p.investment_cents)}</p>
+                <p className="mt-0.5 text-[10px] text-[#1a1a1a]/55">just the comps</p>
+              </div>
+              <span className="text-lg font-black text-[#1a1a1a]/40">→</span>
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-[#1a1a1a]/55">You profit</p>
+                <p className="font-display text-xl font-extrabold leading-none tabular-nums text-[#1a1a1a]">{fmtFloor(profit)}</p>
+              </div>
+              <span className="rounded-lg border-[2px] border-[#1a1a1a] bg-[#5DD96E] px-2.5 py-1 font-display text-lg font-black leading-none text-[#1a1a1a]">~{roiMultiple}X</span>
+            </div>
           </div>
         )}
 

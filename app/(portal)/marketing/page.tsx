@@ -1,17 +1,18 @@
 "use client";
 
 import * as React from "react";
-import { Download, Loader2, AlertCircle, X, ImagePlus, Sparkles } from "lucide-react";
+import { Download, Loader2, AlertCircle, X, ImagePlus, Sparkles, RefreshCw } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { usePartner } from "@/components/partner-context";
 import { bondFetch, partnerPath, getAccessToken } from "@/lib/api/client";
 
-// ─── Templates + per-template field schema ────────────────────────────────────
+// ─── Templates ────────────────────────────────────────────────────────────────
+// Copy lives in the template .html files (single source of truth). The frontend
+// only supplies partner_name, photo_url (photo templates), and colors.
 
 interface Template { id: string; name: string }
 
@@ -27,119 +28,126 @@ const TEMPLATES: Template[] = [
   { id: "09-rent-is-tacos",          name: "Cream type" },
   { id: "10-group-chat",             name: "Group chat" },
   { id: "11-refund-and-fries",       name: "Yellow statement" },
+  { id: "12-now-on-bond",            name: "Brand flex" },
+  { id: "13-now-on-bond-cobrand",    name: "Co-branded" },
+  { id: "14-sticker-badge",          name: "Sticker badge" },
+  { id: "15-equal-lockup",           name: "Equal lockup" },
+  { id: "16-now-available-band",     name: "Now available band" },
 ];
 
-type FieldType = "text" | "html" | "photo";
-interface FieldDef { key: string; label: string; type: FieldType }
+// Per-template image inputs. Each entry's `key` is the exact request field the
+// backend expects; `hint` explains the fallback. Templates not listed take no
+// image input (name/colors only).
+interface ImageInput { key: string; label: string; hint: string }
 
-const HEADLINE: FieldDef = { key: "headline_html", label: "Headline (HTML — use <br/> and <span> for color)", type: "html" };
-const BODY:     FieldDef = { key: "body", label: "Body", type: "text" };
-const FOOTER:   FieldDef = { key: "footer_tagline", label: "Footer tagline", type: "text" };
-
-const STATEMENT_FIELDS = [HEADLINE, BODY, FOOTER];
-const PHOTO_FIELDS = [HEADLINE, BODY, { key: "photo_url", label: "Photo", type: "photo" as const }];
-
-const TEMPLATE_FIELDS: Record<string, FieldDef[]> = {
-  "01-tacos-wifi":             STATEMENT_FIELDS,
-  "03-dinner-bertas-internet": STATEMENT_FIELDS,
-  "09-rent-is-tacos":          STATEMENT_FIELDS,
-  "11-refund-and-fries":       STATEMENT_FIELDS,
-  "02-brunch-internet": [
-    HEADLINE,
-    { key: "cashback_amount", label: "Cashback amount", type: "text" },
-    { key: "receipt_label_1", label: "Receipt line 1",  type: "text" },
-    { key: "receipt_label_2", label: "Receipt line 2",  type: "text" },
-    { key: "receipt_status",  label: "Receipt status",  type: "text" },
-  ],
-  "04-math": [
-    { key: "math_line_1",     label: "Math line 1", type: "text" },
-    { key: "math_line_2",     label: "Math line 2", type: "text" },
-    { key: "math_result_html", label: "Result (HTML)", type: "html" },
-  ],
-  "05-photo-caption": PHOTO_FIELDS,
-  "06-split":         PHOTO_FIELDS,
-  "07-fullbleed-scrim": PHOTO_FIELDS,
-  "08-squad-meme":    PHOTO_FIELDS,
-  "10-group-chat": [
-    HEADLINE,
-    { key: "chat_line_1", label: "Chat message 1", type: "text" },
-    { key: "chat_line_2", label: "Chat message 2", type: "text" },
-    { key: "chat_line_3", label: "Chat message 3", type: "text" },
+const IMAGE_INPUTS: Record<string, ImageInput[]> = {
+  "05-photo-caption":       [{ key: "photo_url", label: "Photo", hint: "Defaults to your logo until you upload your own." }],
+  "06-split":               [{ key: "photo_url", label: "Photo", hint: "Defaults to your logo until you upload your own." }],
+  "07-fullbleed-scrim":     [{ key: "photo_url", label: "Photo", hint: "Defaults to your logo until you upload your own." }],
+  "08-squad-meme":          [{ key: "photo_url", label: "Photo", hint: "Defaults to the squad meme until you upload your own." }],
+  "13-now-on-bond-cobrand": [{ key: "partner_logo_url", label: "Your logo", hint: "Defaults to your saved logo." }],
+  "16-now-available-band":  [
+    { key: "photo_url_top",    label: "Top dish photo",    hint: "Falls back to your logo — upload a real dish photo." },
+    { key: "photo_url_bottom", label: "Bottom dish photo", hint: "Falls back to your logo — upload a real dish photo." },
   ],
 };
 
-const PERIWINKLE = "#7B8FE8";
-const span = (s: string) => `<span style="color:${PERIWINKLE};">${s}</span>`;
+const imageInputsFor = (id: string) => IMAGE_INPUTS[id] ?? [];
+const IMAGE_KEYS = ["photo_url", "partner_logo_url", "photo_url_top", "photo_url_bottom"];
 
+// Templates with a partner-set food word baked into the design.
+const FOOD_TYPE_TEMPLATES = new Set(["01-tacos-wifi", "05-photo-caption", "09-rent-is-tacos"]);
+const hasFoodType = (id: string) => FOOD_TYPE_TEMPLATES.has(id);
+
+// ─── Colors — per-template pickers mapped to palette keys ──────────────────────
+// Bond palette: cream #EEE9DC · yellow #FFD84D · ink #1a1a1a · accent #7B8FE8 · offwhite #FFF9F0
+
+interface ColorPicker { label: string; key: string; default: string }
+
+const COLOR_PICKERS: Record<string, ColorPicker[]> = {
+  "01-tacos-wifi": [
+    { label: "Background", key: "cream",  default: "#EEE9DC" },
+    { label: "Text",       key: "ink",    default: "#1a1a1a" },
+    { label: "Accent",     key: "accent", default: "#7B8FE8" },
+  ],
+  "02-brunch-internet": [
+    { label: "Background", key: "accent",   default: "#7B8FE8" }, // periwinkle bg → accent
+    { label: "Text",       key: "offwhite", default: "#FFF9F0" },
+  ],
+  "03-dinner-bertas-internet": [
+    { label: "Background", key: "ink",      default: "#1a1a1a" },
+    { label: "Text",       key: "offwhite", default: "#FFF9F0" },
+    { label: "Accent",     key: "accent",   default: "#7B8FE8" },
+    { label: "Footer pop", key: "yellow",   default: "#FFD84D" },
+  ],
+  "05-photo-caption": [
+    { label: "Text",        key: "ink",      default: "#1a1a1a" },
+    { label: "Accent",      key: "accent",   default: "#7B8FE8" },
+    { label: "Caption bar", key: "offwhite", default: "#FFF9F0" },
+  ],
+  "06-split": [
+    { label: "Background", key: "cream",  default: "#EEE9DC" },
+    { label: "Text",       key: "ink",    default: "#1a1a1a" },
+    { label: "Accent",     key: "accent", default: "#7B8FE8" },
+  ],
+  "07-fullbleed-scrim": [
+    { label: "Text",   key: "offwhite", default: "#FFF9F0" },
+    { label: "Accent", key: "accent",   default: "#7B8FE8" },
+  ],
+  "08-squad-meme": [
+    { label: "Accent", key: "accent", default: "#7B8FE8" },
+  ],
+  "09-rent-is-tacos": [
+    { label: "Background", key: "cream",  default: "#EEE9DC" },
+    { label: "Text",       key: "ink",    default: "#1a1a1a" },
+    { label: "Accent",     key: "accent", default: "#7B8FE8" },
+  ],
+  "10-group-chat": [
+    { label: "Background",    key: "ink",      default: "#1a1a1a" },
+    { label: "Text",          key: "offwhite", default: "#FFF9F0" },
+    { label: "Accent",        key: "accent",   default: "#7B8FE8" }, // highlighted bubble
+    { label: "Yellow bubble", key: "yellow",   default: "#FFD84D" },
+  ],
+  "11-refund-and-fries": [
+    { label: "Background", key: "yellow", default: "#FFD84D" },
+    { label: "Text",       key: "ink",    default: "#1a1a1a" },
+    { label: "Accent",     key: "accent", default: "#7B8FE8" },
+  ],
+};
+
+const DEFAULT_PICKERS: ColorPicker[] = [{ label: "Accent", key: "accent", default: "#7B8FE8" }];
+const pickersFor = (id: string) => COLOR_PICKERS[id] ?? DEFAULT_PICKERS;
+const defaultColors = (id: string): Record<string, string> =>
+  Object.fromEntries(pickersFor(id).map(p => [p.key, p.default]));
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
-type Tokens = Record<string, string>;
-
 interface Asset {
   template_id:   string;
-  tokens:        Tokens;
-  photo_url:     string | null;
+  images:        Record<string, string>; // image-input key → url (photo_url, partner_logo_url, …)
+  food_type:     string;                 // partner-set food word (templates 01/05/09)
   generated_url: string | null;
+  colors?:       Record<string, string> | null;
 }
 
-interface PromotionListing {
-  id: string; name: string; description: string;
-  active: boolean; review_status: "pending_review" | "approved" | "rejected" | null;
-  planned_budget_cents: number;
-  reward?: { kind: string; percent?: number | null; fixed_off_cents?: number | null } | null;
-  reward_item_name?: string | null;
+// Normalize a raw GET asset (image urls may arrive as flat keys; food_type lives
+// inside tokens) into our shape.
+function normalizeAsset(raw: Record<string, unknown>): Asset {
+  const images: Record<string, string> = {};
+  for (const k of IMAGE_KEYS) if (typeof raw[k] === "string") images[k] = raw[k] as string;
+  if (raw.images && typeof raw.images === "object") Object.assign(images, raw.images);
+  const tokens = (raw.tokens as Record<string, unknown> | undefined) ?? {};
+  return {
+    template_id:   String(raw.template_id),
+    images,
+    food_type:     typeof tokens.food_type === "string" ? tokens.food_type : (typeof raw.food_type === "string" ? raw.food_type : ""),
+    generated_url: (raw.generated_url as string | null) ?? null,
+    colors:        (raw.colors as Record<string, string> | null) ?? null,
+  };
 }
 
-interface PromoContext { partnerName: string; promoTitle: string; budgetFmt: string; cashbackLabel: string; roiX: number | null }
+// ─── Photo upload + download helpers ───────────────────────────────────────────
 
-function fmtWhole(cents: number) {
-  return `$${Math.round(cents / 100).toLocaleString("en-US")}`;
-}
-
-function formatCashback(p: PromotionListing): string {
-  const r = p.reward;
-  if (!r) return "Cash back";
-  if (r.kind === "free_item")        return `Free ${p.reward_item_name ?? "item"}`;
-  if (r.kind === "percent_off_item") return r.percent != null ? `${r.percent}% back` : "Cash back";
-  if (r.kind === "fixed_off_item")   return r.fixed_off_cents != null ? `$${(r.fixed_off_cents / 100).toFixed(0)} back` : "Cash back";
-  return "Cash back";
-}
-
-// Smart defaults so templates never render raw {{TOKEN}}.
-function defaultsFor(id: string, ctx: PromoContext): Tokens {
-  const { partnerName, promoTitle, budgetFmt } = ctx;
-  const base: Tokens = { partner_name: partnerName, eyebrow: "Now on Bond" };
-  switch (id) {
-    case "01-tacos-wifi":
-      return { ...base, headline_html: `Your food paid<br/>the ${span("Wi-Fi.")}`, body: "Order together, get cash back. Every time.", footer_tagline: "You can't bond alone." };
-    case "03-dinner-bertas-internet":
-      return { ...base, headline_html: `Dinner at ${partnerName}<br/>paid the ${span("internet.")}`, body: "Bring the group. Bond covers the cashback.", footer_tagline: "You can't bond alone." };
-    case "09-rent-is-tacos":
-      return { ...base, headline_html: `Rent is just<br/>a lot of ${span("good food.")}`, body: "Order together, get cash back. Every time.", footer_tagline: "You can't bond alone." };
-    case "11-refund-and-fries":
-      return { ...base, headline_html: `Your group order<br/>just paid you ${span("back.")}`, body: "That's how Bond works.", footer_tagline: "You can't bond alone." };
-    case "02-brunch-internet":
-      return { ...base, headline_html: partnerName, cashback_amount: ctx.cashbackLabel, receipt_label_1: promoTitle, receipt_label_2: "Bond cashback", receipt_status: "covered" };
-    case "04-math":
-      return { ...base, headline_html: `The math<br/>${span("checks out.")}`, math_line_1: `You put in ${budgetFmt}`, math_line_2: "Groups spend more, you keep the difference", math_result_html: `That's ${span(`${ctx.roiX ?? "real"}${ctx.roiX != null ? "X" : ""}`)} back` };
-    case "05-photo-caption":
-    case "06-split":
-    case "07-fullbleed-scrim":
-      return { ...base, headline_html: `Good food.<br/>Better ${span("together.")}`, body: "Order together, get cash back. Every time." };
-    case "08-squad-meme":
-      return { ...base, headline_html: `Good food.<br/>Better ${span("together.")}`, body: "Your squad rolling in to get hella cashback." };
-    case "10-group-chat":
-      return { ...base, headline_html: partnerName, chat_line_1: `anyone down for ${partnerName || "dinner"}?`, chat_line_2: "YES if we use Bond 👀", chat_line_3: "already activated the perk lol" };
-    default:
-      return base;
-  }
-}
-
-// ─── Photo upload (multipart) ──────────────────────────────────────────────────
-
-// Uploads a photo for a single marketing material WITHOUT touching the partner's
-// logo. Hits the dedicated promo-image photo endpoint.
 async function uploadPhoto(file: File, templateId: string): Promise<string> {
   const BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "";
   const token = getAccessToken();
@@ -172,29 +180,58 @@ async function downloadImage(url: string, filename: string) {
   }
 }
 
-// ─── Edit modal ────────────────────────────────────────────────────────────────
+// ─── Image upload row ──────────────────────────────────────────────────────────
+
+function ImageUploadRow({ input, url, uploading, onPick }: { input: ImageInput; url: string | null; uploading: boolean; onPick: (f: File) => void }) {
+  const ref = React.useRef<HTMLInputElement>(null);
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-xs text-muted-foreground">{input.label} <span className="font-normal text-muted-foreground/70">(optional)</span></Label>
+      <div className="flex items-center gap-3">
+        <div className="size-16 shrink-0 overflow-hidden rounded-lg border border-border bg-secondary/40">
+          {url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={url} alt="" className="size-full object-cover" />
+          ) : (
+            <div className="flex size-full items-center justify-center text-muted-foreground/50"><ImagePlus className="size-5" /></div>
+          )}
+        </div>
+        <Button variant="outline" size="sm" className="gap-1.5 text-xs" disabled={uploading} onClick={() => ref.current?.click()}>
+          {uploading ? <Loader2 className="size-3.5 animate-spin" /> : <ImagePlus className="size-3.5" />}
+          {url ? "Replace" : "Upload"}
+        </Button>
+        <input
+          ref={ref} type="file" accept="image/jpeg,image/png,image/webp" className="hidden"
+          onChange={e => { const file = e.target.files?.[0]; if (file) onPick(file); e.target.value = ""; }}
+        />
+      </div>
+      <p className="text-[11px] text-muted-foreground">{input.hint}</p>
+    </div>
+  );
+}
+
+// ─── Edit modal — photo + colors only ──────────────────────────────────────────
 
 function EditModal({
-  template, ctx, asset, onClose, onGenerated,
+  template, partnerName, asset, onClose, onGenerated,
 }: {
   template: Template;
-  ctx: PromoContext;
+  partnerName: string;
   asset: Asset | undefined;
   onClose: () => void;
   onGenerated: (a: Asset) => void;
 }) {
-  const fields = TEMPLATE_FIELDS[template.id] ?? STATEMENT_FIELDS;
-  const initial = React.useMemo(
-    () => ({ ...defaultsFor(template.id, ctx), ...(asset?.tokens ?? {}) }),
-    [template.id, ctx, asset]
-  );
-  const [tokens, setTokens] = React.useState<Tokens>(initial);
-  const [photoUrl, setPhotoUrl] = React.useState<string | null>(asset?.photo_url ?? null);
+  const imageInputs = imageInputsFor(template.id);
+  const foodTemplate = hasFoodType(template.id);
+  const [colors, setColors] = React.useState<Record<string, string>>({ ...defaultColors(template.id), ...(asset?.colors ?? {}) });
+  const [images, setImages] = React.useState<Record<string, string>>(asset?.images ?? {});
+  const [foodType, setFoodType] = React.useState<string>(asset?.food_type ?? "");
+  const foodMissing = foodTemplate && !foodType.trim();
   const [preview, setPreview] = React.useState<string | null>(asset?.generated_url ?? null);
   const [busy, setBusy] = React.useState(false);
-  const [uploading, setUploading] = React.useState(false);
+  const [uploadingKey, setUploadingKey] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
-  const fileRef = React.useRef<HTMLInputElement>(null);
+  const [statusMsg, setStatusMsg] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -202,47 +239,58 @@ function EditModal({
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  const isPhotoTemplate = fields.some(f => f.type === "photo");
-
-  function set(key: string, value: string) {
-    setTokens(t => ({ ...t, [key]: value }));
-  }
-
-  async function handlePhoto(file: File) {
+  async function handlePhoto(key: string, file: File) {
     setError(null);
-    setUploading(true);
+    setUploadingKey(key);
     try {
-      setPhotoUrl(await uploadPhoto(file, template.id));
+      const url = await uploadPhoto(file, template.id);
+      setImages(im => ({ ...im, [key]: url }));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Upload failed.");
     } finally {
-      setUploading(false);
+      setUploadingKey(null);
     }
   }
 
   async function generate() {
     setBusy(true);
     setError(null);
+    setStatusMsg(null);
     try {
-      const res = await bondFetch<{ url: string; template_id: string }>(
+      const res = await bondFetch<{ url: string; cached?: boolean }>(
         partnerPath("/promo-images"),
         {
           method: "POST",
           body: JSON.stringify({
             template_id: template.id,
-            ...tokens,
-            ...(isPhotoTemplate && photoUrl ? { photo_url: photoUrl } : {}),
+            partner_name: partnerName,
+            colors,
+            ...images, // photo_url / partner_logo_url / photo_url_top / photo_url_bottom
+            ...(foodTemplate ? { food_type: foodType.trim() } : {}),
           }),
         }
       );
       setPreview(res.url);
-      onGenerated({ template_id: template.id, tokens, photo_url: photoUrl, generated_url: res.url });
+      setStatusMsg(res.cached ? "No changes — showing the saved version." : "Updated.");
+      onGenerated({ template_id: template.id, images, food_type: foodType.trim(), generated_url: res.url, colors });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Couldn't generate. Try again.");
     } finally {
       setBusy(false);
     }
   }
+
+  // Auto-apply color / food-type changes (debounced) so edits update + save the
+  // preview without a separate step.
+  const generateRef = React.useRef(generate);
+  generateRef.current = generate;
+  const firstAutoRun = React.useRef(true);
+  React.useEffect(() => {
+    if (firstAutoRun.current) { firstAutoRun.current = false; return; }
+    const t = setTimeout(() => { if (!busy) generateRef.current(); }, 700);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [colors, foodType]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm animate-fade-in" onClick={onClose}>
@@ -273,7 +321,9 @@ function EditModal({
           <div className="flex items-center justify-between border-b border-border/60 px-5 py-4">
             <div>
               <p className="font-display text-base font-bold text-foreground">{template.name}</p>
-              <p className="text-xs text-muted-foreground">Edit the copy, then generate.</p>
+              <p className="text-xs text-muted-foreground">
+                {imageInputs.length ? "Swap the photo and colors, then generate." : "Adjust the colors, then generate."}
+              </p>
             </div>
             <button onClick={onClose} aria-label="Close" className="flex size-8 items-center justify-center rounded-full text-muted-foreground hover:bg-secondary">
               <X className="size-4" />
@@ -281,53 +331,93 @@ function EditModal({
           </div>
 
           <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
-            {fields.map(f =>
-              f.type === "photo" ? (
-                <div key={f.key} className="space-y-1.5">
-                  <Label className="text-xs text-muted-foreground">{f.label} <span className="font-normal text-muted-foreground/70">(optional)</span></Label>
-                  <div className="flex items-center gap-3">
-                    <div className="size-16 shrink-0 overflow-hidden rounded-lg border border-border bg-secondary/40">
-                      {photoUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={photoUrl} alt="" className="size-full object-cover" />
-                      ) : (
-                        <div className="flex size-full items-center justify-center text-muted-foreground/50"><ImagePlus className="size-5" /></div>
-                      )}
-                    </div>
-                    <Button variant="outline" size="sm" className="gap-1.5 text-xs" disabled={uploading} onClick={() => fileRef.current?.click()}>
-                      {uploading ? <Loader2 className="size-3.5 animate-spin" /> : <ImagePlus className="size-3.5" />}
-                      {photoUrl ? "Replace photo" : "Upload photo"}
-                    </Button>
-                    <input
-                      ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden"
-                      onChange={e => { const file = e.target.files?.[0]; if (file) handlePhoto(file); e.target.value = ""; }}
-                    />
-                  </div>
-                  <p className="text-[11px] text-muted-foreground">
-                    {template.id === "08-squad-meme" ? "Defaults to the squad meme until you upload your own." : "Defaults to your logo until you upload your own."}
-                  </p>
-                </div>
-              ) : (
-                <div key={f.key} className="space-y-1.5">
-                  <Label className="text-xs text-muted-foreground">{f.label}</Label>
-                  {f.type === "html" ? (
-                    <Textarea rows={2} value={tokens[f.key] ?? ""} onChange={e => set(f.key, e.target.value)} className="font-mono text-xs" />
-                  ) : (
-                    <Input value={tokens[f.key] ?? ""} onChange={e => set(f.key, e.target.value)} />
-                  )}
-                </div>
-              )
+            {/* Image inputs (1+ depending on template) */}
+            {imageInputs.map(inp => (
+              <ImageUploadRow
+                key={inp.key}
+                input={inp}
+                url={images[inp.key] ?? null}
+                uploading={uploadingKey === inp.key}
+                onPick={file => handlePhoto(inp.key, file)}
+              />
+            ))}
+
+            {/* Food type (templates 01 / 05 / 09) */}
+            {foodTemplate && (
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Food type</Label>
+                <Input
+                  value={foodType}
+                  onChange={e => setFoodType(e.target.value)}
+                  placeholder="e.g. wings, tacos, pizza"
+                />
+                <p className={`text-[11px] ${foodMissing ? "text-amber-600" : "text-muted-foreground"}`}>
+                  {foodMissing
+                    ? "Add a food word — it appears in the headline. Required before you can download."
+                    : "One short word or phrase. Casing is handled for you."}
+                </p>
+              </div>
             )}
+
+            {/* Colors */}
+            <div className="space-y-2.5">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs text-muted-foreground">Colors</Label>
+                <button
+                  onClick={() => setColors(defaultColors(template.id))}
+                  className="text-xs font-medium text-muted-foreground hover:text-foreground"
+                >
+                  Reset to Bond defaults
+                </button>
+              </div>
+              <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+                {pickersFor(template.id).map(p => {
+                  const val = colors[p.key] ?? p.default;
+                  return (
+                    <div key={p.key} className="flex items-center gap-2">
+                      <input
+                        type="color"
+                        value={val}
+                        onChange={e => setColors(c => ({ ...c, [p.key]: e.target.value }))}
+                        aria-label={p.label}
+                        className="size-9 shrink-0 cursor-pointer rounded-lg border border-border bg-card p-0.5"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[11px] font-medium text-foreground">{p.label}</p>
+                        <Input
+                          value={val}
+                          onChange={e => setColors(c => ({ ...c, [p.key]: e.target.value }))}
+                          className="h-7 w-full font-mono text-[11px] uppercase"
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <Button variant="secondary" size="sm" className="w-full gap-1.5" onClick={generate} disabled={busy}>
+                {busy ? <><Loader2 className="size-3.5 animate-spin" /> Applying…</> : "Apply colors"}
+              </Button>
+            </div>
+
             {error && <p className="text-xs text-destructive">{error}</p>}
           </div>
 
-          <div className="flex items-center gap-2 border-t border-border/60 px-5 py-4">
-            <Button className="flex-1 gap-1.5" onClick={generate} disabled={busy}>
-              {busy ? <><Loader2 className="size-4 animate-spin" /> Generating…</> : <><Sparkles className="size-4" /> Generate</>}
-            </Button>
-            <Button variant="outline" className="gap-1.5" disabled={!preview} onClick={() => preview && downloadImage(preview, `bond-${template.id}.png`)}>
-              <Download className="size-4" /> Download
-            </Button>
+          <div className="space-y-2 border-t border-border/60 px-5 py-4">
+            {statusMsg && <p className="text-[11px] text-muted-foreground">{statusMsg}</p>}
+            <div className="flex items-center gap-2">
+              <Button className="flex-1 gap-1.5" onClick={generate} disabled={busy}>
+                {busy ? <><Loader2 className="size-4 animate-spin" /> Generating…</> : <><Sparkles className="size-4" /> Generate</>}
+              </Button>
+              <Button
+                variant="outline"
+                className="gap-1.5"
+                disabled={!preview || foodMissing}
+                title={foodMissing ? "Add a food type first" : undefined}
+                onClick={() => preview && downloadImage(preview, `bond-${template.id}.png`)}
+              >
+                <Download className="size-4" /> Download
+              </Button>
+            </div>
           </div>
         </div>
       </div>
@@ -375,34 +465,53 @@ export default function MarketingPage() {
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const [openId, setOpenId] = React.useState<string | null>(null);
-  const [ctx, setCtx] = React.useState<PromoContext>({ partnerName: "", promoTitle: "your promo", budgetFmt: "$500", cashbackLabel: "Cash back", roiX: null });
-  const [ctxReady, setCtxReady] = React.useState(false);
   const [generating, setGenerating] = React.useState<Record<string, boolean>>({});
   const autoStarted = React.useRef(false);
 
-  const isPhotoTemplate = (id: string) => (TEMPLATE_FIELDS[id] ?? []).some(f => f.type === "photo");
+  const partnerName = partner?.name ?? "";
+  const anyGenerating = Object.values(generating).some(Boolean);
 
-  const runGenerate = React.useCallback(async (id: string, tokens: Tokens, photoUrl: string | null, isPhoto: boolean) => {
+  const runGenerate = React.useCallback(async (id: string, name: string, images: Record<string, string>, colors?: Record<string, string> | null, foodType?: string) => {
     setGenerating(g => ({ ...g, [id]: true }));
     const post = () => bondFetch<{ url: string }>(partnerPath("/promo-images"), {
       method: "POST",
-      body: JSON.stringify({ template_id: id, ...tokens, ...(isPhoto && photoUrl ? { photo_url: photoUrl } : {}) }),
+      body: JSON.stringify({
+        template_id: id,
+        partner_name: name,
+        ...(colors ? { colors } : {}),
+        ...(hasFoodType(id) && foodType ? { food_type: foodType } : {}),
+        ...images,
+      }),
     });
     try {
       let res;
       try {
         res = await post();
       } catch {
-        await new Promise(r => setTimeout(r, 900)); // one retry — image renders can be flaky under load
+        await new Promise(r => setTimeout(r, 900)); // one retry — renders can be flaky under load
         res = await post();
       }
-      setAssets(prev => ({ ...prev, [id]: { template_id: id, tokens, photo_url: photoUrl, generated_url: res.url } }));
+      setAssets(prev => ({ ...prev, [id]: { template_id: id, images, food_type: foodType ?? prev[id]?.food_type ?? "", generated_url: res.url, colors: colors ?? prev[id]?.colors ?? null } }));
     } catch {
       /* leave the card un-generated; partner can retry from the modal */
     } finally {
       setGenerating(g => ({ ...g, [id]: false }));
     }
   }, []);
+
+  // Regenerate every template with its saved images + colors + food type (defaults otherwise).
+  const regenAll = React.useCallback(() => {
+    const todo = [...TEMPLATES];
+    let i = 0;
+    const worker = async () => {
+      while (i < todo.length) {
+        const t = todo[i++];
+        const a = assets[t.id];
+        await runGenerate(t.id, partnerName, a?.images ?? {}, a?.colors ?? undefined, a?.food_type || undefined);
+      }
+    };
+    Promise.all(Array.from({ length: 4 }, () => worker()));
+  }, [assets, partnerName, runGenerate]);
 
   // Seed instantly from the local cache so previews show without waiting on GET.
   React.useEffect(() => {
@@ -411,7 +520,7 @@ export default function MarketingPage() {
       const raw = localStorage.getItem(`bond_promo_assets_${partner.id}`);
       if (raw) {
         const cached = JSON.parse(raw) as Record<string, Asset>;
-        setAssets(prev => ({ ...cached, ...prev })); // server/live state wins over cache
+        setAssets(prev => ({ ...cached, ...prev }));
       }
     } catch { /* ignore bad cache */ }
   }, [partner?.id]);
@@ -426,75 +535,37 @@ export default function MarketingPage() {
 
   // Restore saved assets from the server (source of truth, merged over cache).
   React.useEffect(() => {
-    bondFetch<{ assets: Asset[] }>(partnerPath("/promo-images"))
+    bondFetch<{ assets: Record<string, unknown>[] }>(partnerPath("/promo-images"))
       .then(r => {
         const map: Record<string, Asset> = {};
-        for (const a of r.assets ?? []) map[a.template_id] = a;
+        for (const raw of r.assets ?? []) {
+          const a = normalizeAsset(raw);
+          map[a.template_id] = a;
+        }
         setAssets(prev => ({ ...prev, ...map }));
       })
       .catch(() => setError("Couldn't load your saved materials."))
       .finally(() => setLoading(false));
   }, []);
 
-  // Build copy context from partner + active promo.
+  // Auto-generate any template that has no saved preview yet, once the partner
+  // is loaded. Photo/colors fall back to the template defaults server-side.
   React.useEffect(() => {
-    if (!partner) return;
-    setCtx(c => ({ ...c, partnerName: partner.name ?? c.partnerName }));
-    bondFetch<{ promotions: PromotionListing[] }>(partnerPath("/promotions"))
-      .then(r => {
-        const promo = r.promotions.find(p => p.active) ?? r.promotions.find(p => p.review_status === "approved") ?? r.promotions[0];
-        if (!promo) { setCtxReady(true); return; }
-
-        setCtx(c => ({
-          ...c,
-          promoTitle: promo.name || c.promoTitle,
-          budgetFmt: promo.planned_budget_cents ? fmtWhole(promo.planned_budget_cents) : c.budgetFmt,
-          cashbackLabel: formatCashback(promo),
-        }));
-
-        // Pull real ROI for the math template from the funding projection.
-        if (promo.planned_budget_cents) {
-          bondFetch<{ projection: { profit_cents: number; investment_cents: number } | null }>(
-            partnerPath("/billing/funding-projection"),
-            { method: "POST", body: JSON.stringify({ amount_cents: promo.planned_budget_cents }) }
-          )
-            .then(p => {
-              const proj = p.projection;
-              if (proj && proj.investment_cents > 0) {
-                setCtx(c => ({ ...c, roiX: Math.round(proj.profit_cents / proj.investment_cents) }));
-              }
-            })
-            .catch(() => {})
-            .finally(() => setCtxReady(true));
-        } else {
-          setCtxReady(true);
-        }
-      })
-      .catch(() => setCtxReady(true));
-  }, [partner]);
-
-  // Auto-generate any template that has no saved preview yet (once content is ready).
-  React.useEffect(() => {
-    if (loading || !ctxReady || autoStarted.current) return;
+    if (loading || !partner || autoStarted.current) return;
     autoStarted.current = true;
 
-    // Auto-generate everything. Photo templates send no photo_url unless the
-    // partner saved one — the backend falls back to the logo (05/06/07) or the
-    // meme (08) automatically. Limit concurrency so the renderer isn't
-    // overwhelmed (firing all 11 at once makes some fail).
     const todo = TEMPLATES.filter(t => !assets[t.id]?.generated_url);
     let i = 0;
     const worker = async () => {
       while (i < todo.length) {
         const t = todo[i++];
-        const photo = assets[t.id]?.photo_url ?? null;
-        const tokens = { ...defaultsFor(t.id, ctx), ...(assets[t.id]?.tokens ?? {}) };
-        await runGenerate(t.id, tokens, photo, isPhotoTemplate(t.id));
+        const a = assets[t.id];
+        await runGenerate(t.id, partnerName, a?.images ?? {}, a?.colors ?? undefined, a?.food_type || undefined);
       }
     };
-    Promise.all(Array.from({ length: 4 }, () => worker()));
+    Promise.all(Array.from({ length: 4 }, () => worker())); // capped concurrency
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loading, ctxReady]);
+  }, [loading, partner]);
 
   const openTemplate = TEMPLATES.find(t => t.id === openId) ?? null;
 
@@ -502,8 +573,12 @@ export default function MarketingPage() {
     <div className="animate-fade-in">
       <PageHeader
         title="Marketing materials"
-        description="Branded social posts for your venue. Tap a template to edit the copy, generate, and download."
-      />
+        description="Branded social posts for your venue. Tap a template to swap the photo or colors, generate, and download."
+      >
+        <Button variant="outline" size="sm" className="gap-1.5" onClick={regenAll} disabled={loading || anyGenerating}>
+          <RefreshCw className={`size-4 ${anyGenerating ? "animate-spin" : ""}`} /> Regenerate all
+        </Button>
+      </PageHeader>
 
       {loading ? (
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
@@ -532,7 +607,7 @@ export default function MarketingPage() {
       {openTemplate && (
         <EditModal
           template={openTemplate}
-          ctx={ctx}
+          partnerName={partnerName}
           asset={assets[openTemplate.id]}
           onClose={() => setOpenId(null)}
           onGenerated={a => setAssets(prev => ({ ...prev, [a.template_id]: a }))}
